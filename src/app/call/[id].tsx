@@ -4,23 +4,36 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import BackButton from '../../components/BackButton';
+import AppBackground from '../../components/AppBackground';
+import AppBlurView from '../../components/AppBlurView';
+import AppModal from '../../components/AppModal';
+import CoinIcon from '../../components/CoinIcon';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
+import { useTheme } from '../../context/ThemeContext';
 import { StitchTheme } from '../../constants/theme';
-import { MOCK_PROFILES, Profile } from '../../data/mockProfiles';
+import { FAKE_CALL_VIDEOS, MOCK_PROFILES, Profile, VIRTUAL_GIFTS, findGiftVisual } from '../../data/mockProfiles';
 import { deductCoins, useWallet } from '../../services/wallet';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type CallState = 'ringing' | 'connected' | 'ended';
 
@@ -28,14 +41,52 @@ interface FloatingItem {
   id: string;
   icon: string;
   anim: Animated.Value;
-  xOffset: number;
+  startX: number;
+  swayAmount: number;
+  scale: number;
 }
+
+interface CenterChatMessage {
+  id: string;
+  text: string;
+  anim: Animated.Value;
+}
+
+interface ActiveGiftCelebration {
+  id: string;
+  name: string;
+  emoji: string;
+  image: string;
+  coins: number;
+  category: string;
+  accentColor: string;
+  glowColor: string;
+  comboCount: number;
+}
+
+const CELEBRATION_PARTICLES = [
+  { id: 1, char: '✨', angle: 0, distance: 165 },
+  { id: 2, char: '💖', angle: 30, distance: 195 },
+  { id: 3, char: '⭐', angle: 60, distance: 175 },
+  { id: 4, char: '💎', angle: 90, distance: 190 },
+  { id: 5, char: '🌟', angle: 120, distance: 170 },
+  { id: 6, char: '✨', angle: 150, distance: 205 },
+  { id: 7, char: '🔥', angle: 180, distance: 175 },
+  { id: 8, char: '💖', angle: 210, distance: 195 },
+  { id: 9, char: '⭐', angle: 240, distance: 170 },
+  { id: 10, char: '💎', angle: 270, distance: 205 },
+  { id: 11, char: '🌟', angle: 300, distance: 175 },
+  { id: 12, char: '✨', angle: 330, distance: 190 },
+];
+
+const EMOJI_REACTIONS = ['❤️', '🔥', '👏', '😍', '🎉', '🌹', '✨', '😘', '🥰', '💖'];
 
 export default function VideoCallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile: Profile = MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
+  const { theme, isDark } = useTheme();
 
   const { coins } = useWallet();
   const [callState, setCallState] = useState<CallState>('ringing');
@@ -44,13 +95,52 @@ export default function VideoCallScreen() {
   const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [coinsDepletedModalVisible, setCoinsDepletedModalVisible] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [selectedModalPhoto, setSelectedModalPhoto] = useState<string | null>(null);
   const [floatingGifts, setFloatingGifts] = useState<FloatingItem[]>([]);
+  const [chatText, setChatText] = useState('');
+  const [centerMessages, setCenterMessages] = useState<CenterChatMessage[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const [permission, requestPermission] = useCameraPermissions();
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const sonar1 = useRef(new Animated.Value(0)).current;
+  const sonar2 = useRef(new Animated.Value(0)).current;
+  const sonar3 = useRef(new Animated.Value(0)).current;
 
-  // Video player setup
-  const player = useVideoPlayer(profile.videoUrl, (p) => {
+  // Gift Unboxing & Travel Animations (Goes from bottom to center, opens to reveal gift)
+  const [activeCelebration, setActiveCelebration] = useState<ActiveGiftCelebration | null>(null);
+  const giftTravelAnim = useRef(new Animated.Value(0)).current; // 0 (bottom) -> 1 (center)
+  const boxOpenAnim = useRef(new Animated.Value(0)).current;    // 0 (closed) -> 1 (bursts open)
+  const giftRevealAnim = useRef(new Animated.Value(0)).current; // 0 (hidden) -> 1 (revealed & scaled)
+  const giftExitAnim = useRef(new Animated.Value(1)).current;   // 1 (visible) -> 0 (fade exit)
+  const comboCountRef = useRef(1);
+  const celebrationTimerRef = useRef<any>(null);
+
+  // Video player setup (loops indefinitely for fake video call)
+  const selectedVideoUrl = profile.videoUrl || FAKE_CALL_VIDEOS[0];
+  const player = useVideoPlayer(selectedVideoUrl, (p) => {
     p.loop = true;
     p.muted = false;
   });
@@ -62,9 +152,13 @@ export default function VideoCallScreen() {
     }
   }, [permission]);
 
-  // Ringing phase logic
+  // Ringing phase logic with Radar Sonar Waves & Encrypted Stream setup
   useEffect(() => {
     let timer: any;
+    let s1Anim: Animated.CompositeAnimation;
+    let s2Anim: Animated.CompositeAnimation;
+    let s3Anim: Animated.CompositeAnimation;
+
     if (callState === 'ringing') {
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -73,17 +167,42 @@ export default function VideoCallScreen() {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.25,
-            duration: 800,
+            toValue: 1.15,
+            duration: 750,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 800,
+            duration: 750,
             useNativeDriver: true,
           }),
         ])
       ).start();
+
+      const createSonar = (anim: Animated.Value, delay: number) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 2200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+      };
+
+      s1Anim = createSonar(sonar1, 0);
+      s2Anim = createSonar(sonar2, 700);
+      s3Anim = createSonar(sonar3, 1400);
+      s1Anim.start();
+      s2Anim.start();
+      s3Anim.start();
 
       timer = setTimeout(() => {
         setCallState('connected');
@@ -91,9 +210,14 @@ export default function VideoCallScreen() {
           player.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (e) {}
-      }, 2400);
+      }, 2600);
     }
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (s1Anim) s1Anim.stop();
+      if (s2Anim) s2Anim.stop();
+      if (s3Anim) s3Anim.stop();
+    };
   }, [callState]);
 
   // Timer & Coin deduction
@@ -106,11 +230,8 @@ export default function VideoCallScreen() {
           if (next > 0 && next % 60 === 0) {
             deductCoins(profile.callRate).then((success) => {
               if (!success) {
-                Alert.alert(
-                  'Call Ended',
-                  'Your coin balance is empty! Please recharge to continue calling.',
-                  [{ text: 'OK', onPress: () => handleEndCall() }]
-                );
+                handleEndCall();
+                setCoinsDepletedModalVisible(true);
               }
             });
           }
@@ -128,24 +249,160 @@ export default function VideoCallScreen() {
     setCallState('ended');
   };
 
-  const handleGiftSent = (gift: { name: string; icon: string; coins: number }) => {
+  const handleGiftSent = (gift: any) => {
+    // Exact matching guarantee so the exact gift sent is displayed
+    const matched =
+      VIRTUAL_GIFTS.find(
+        (g) =>
+          g.name === gift.name ||
+          g.id === (gift as any).id ||
+          (gift.emoji && g.emoji === gift.emoji)
+      ) ||
+      (gift.name ? gift : VIRTUAL_GIFTS[0]);
+
+    const giftName = matched.name || gift.name || 'Gift';
+    const giftEmoji = matched.emoji || gift.emoji || '🎁';
+    const giftImage = matched.image || gift.image || VIRTUAL_GIFTS[0].image;
+    const giftCoins = matched.coins || gift.coins || 10;
+    const giftColor = matched.accentColor || gift.accentColor || '#F65592';
+    const giftGlow = matched.glowColor || gift.glowColor || 'rgba(246, 85, 146, 0.4)';
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch (e) {}
+
+    // Check consecutive combo for the same gift
+    if (activeCelebration && activeCelebration.name === giftName) {
+      comboCountRef.current += 1;
+    } else {
+      comboCountRef.current = 1;
+    }
+
+    const currentCombo = comboCountRef.current;
+
+    setActiveCelebration({
+      id: Math.random().toString(),
+      name: giftName,
+      emoji: giftEmoji,
+      image: giftImage,
+      coins: giftCoins,
+      category: matched.category || 'Popular',
+      accentColor: giftColor,
+      glowColor: giftGlow,
+      comboCount: currentCombo,
+    });
+
+    // Reset unboxing animations
+    giftTravelAnim.setValue(0);
+    boxOpenAnim.setValue(0);
+    giftRevealAnim.setValue(0);
+    giftExitAnim.setValue(1);
+
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+
+    // Stage 1: Gift box flies smoothly up from bottom to center
+    Animated.timing(giftTravelAnim, {
+      toValue: 1,
+      duration: 460,
+      useNativeDriver: true,
+    }).start(() => {
+      // Stage 2: Box pops open & inner gift reveals with energetic spring
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+
+      Animated.parallel([
+        Animated.timing(boxOpenAnim, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+        Animated.spring(giftRevealAnim, {
+          toValue: 1,
+          friction: 4.5,
+          tension: 48,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Stage 3: Hold in center for 2.8s, then graceful fade out
+      celebrationTimerRef.current = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(giftRevealAnim, {
+            toValue: 1.18,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(giftExitAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setActiveCelebration(null);
+          comboCountRef.current = 1;
+        });
+      }, 2800);
+    });
+  };
+
+  const handleSendReaction = (emoji: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+
     const anim = new Animated.Value(0);
+    // Spawns randomly across the entire width of the screen at the bottom
+    const startX = Math.floor(Math.random() * (SCREEN_WIDTH - 80)) + 20;
+    const swayAmount = (Math.random() - 0.5) * 60;
+    const scale = 0.9 + Math.random() * 0.35;
+
     const newGift: FloatingItem = {
       id: Math.random().toString(),
-      icon: gift.icon,
+      icon: emoji,
       anim,
-      xOffset: (Math.random() - 0.5) * 140,
+      startX,
+      swayAmount,
+      scale,
     };
-    setFloatingGifts((prev) => [...prev, newGift]);
+    setFloatingGifts((prev) => [...prev.slice(-15), newGift]);
 
     Animated.timing(anim, {
       toValue: 1,
-      duration: 1800,
+      duration: 2200,
       useNativeDriver: true,
     }).start(() => {
       setFloatingGifts((prev) => prev.filter((g) => g.id !== newGift.id));
     });
   };
+
+  const handleSendMessage = () => {
+    const trimmed = chatText.trim();
+    if (!trimmed) return;
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+
+    const anim = new Animated.Value(0);
+    const newMsg: CenterChatMessage = {
+      id: Date.now().toString(),
+      text: trimmed,
+      anim,
+    };
+
+    setCenterMessages((prev) => [...prev.slice(-2), newMsg]);
+    setChatText('');
+
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 5800,
+      useNativeDriver: true,
+    }).start(() => {
+      setCenterMessages((prev) => prev.filter((m) => m.id !== newMsg.id));
+    });
+  };
+
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -156,39 +413,134 @@ export default function VideoCallScreen() {
   // -------------------------------------------------------------
   // RINGING SCREEN
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // RINGING SCREEN (ADVANCED VIP PRIVATE CONNECTION SCREEN)
+  // -------------------------------------------------------------
   if (callState === 'ringing') {
     return (
       <View style={styles.ringingContainer}>
-        <Image source={{ uri: profile.avatar }} style={StyleSheet.absoluteFill} blurRadius={30} />
-        <View style={styles.ringingOverlay}>
-          <SafeAreaView style={styles.ringingContent} edges={['top', 'bottom']}>
-            <View style={styles.ringingTop}>
-              <Text style={styles.connectingTitle}>CONNECTING CALL...</Text>
+        <Image source={{ uri: profile.avatar }} style={StyleSheet.absoluteFill} blurRadius={38} />
+        <LinearGradient
+          colors={['rgba(8, 10, 12, 0.84)', 'rgba(8, 10, 12, 0.72)', 'rgba(8, 10, 12, 0.94)']}
+          style={StyleSheet.absoluteFill}
+        />
+        <SafeAreaView style={styles.ringingContent} edges={['top', 'bottom']}>
+          {/* Top Security & Status Ticker */}
+          <View style={styles.ringingHeaderSection}>
+            <BlurView intensity={70} tint="dark" style={styles.encryptedPill}>
+              <View style={styles.greenLiveDot} />
+              <Text style={styles.encryptedPillText}>256-BIT ENCRYPTED HD LINE</Text>
+            </BlurView>
+            <Text style={styles.connectingTitle}>CALLING VIP STREAM...</Text>
+          </View>
+
+          {/* Center Radar Sonar Avatar Section */}
+          <View style={styles.radarSonarContainer}>
+            {/* Sonar Ring 1 */}
+            <Animated.View
+              style={[
+                styles.sonarRing,
+                {
+                  transform: [
+                    {
+                      scale: sonar1.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 2.5],
+                      }),
+                    },
+                  ],
+                  opacity: sonar1.interpolate({
+                    inputRange: [0, 0.3, 1],
+                    outputRange: [0.8, 0.4, 0],
+                  }),
+                },
+              ]}
+            />
+            {/* Sonar Ring 2 */}
+            <Animated.View
+              style={[
+                styles.sonarRing,
+                {
+                  transform: [
+                    {
+                      scale: sonar2.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 2.5],
+                      }),
+                    },
+                  ],
+                  opacity: sonar2.interpolate({
+                    inputRange: [0, 0.3, 1],
+                    outputRange: [0.8, 0.4, 0],
+                  }),
+                },
+              ]}
+            />
+            {/* Sonar Ring 3 */}
+            <Animated.View
+              style={[
+                styles.sonarRing,
+                {
+                  transform: [
+                    {
+                      scale: sonar3.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 2.5],
+                      }),
+                    },
+                  ],
+                  opacity: sonar3.interpolate({
+                    inputRange: [0, 0.3, 1],
+                    outputRange: [0.8, 0.4, 0],
+                  }),
+                },
+              ]}
+            />
+
+            {/* Glowing Avatar Frame with Gradient Border */}
+            <Animated.View style={[styles.avatarPulseRing, { transform: [{ scale: pulseAnim }] }]}>
+              <LinearGradient
+                colors={['#f65592', '#FFD700', '#f65592']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarGradientBorder}
+              >
+                <Image source={{ uri: profile.avatar }} style={styles.ringingAvatar} />
+              </LinearGradient>
+            </Animated.View>
+          </View>
+
+          {/* Caller Identity Card */}
+          <View style={styles.ringingMetaCard}>
+            <View style={styles.ringingNameRow}>
               <Text style={styles.ringingName}>{profile.name}</Text>
+              <Ionicons name="checkmark-circle" size={22} color="#f65592" />
+            </View>
+            <View style={styles.ringingLocationRow}>
+              <Ionicons name="location-sharp" size={14} color="#dfbec6" />
               <Text style={styles.ringingLocation}>
                 {profile.city}, {profile.country}
               </Text>
-              <View style={styles.rateChip}>
-                <Text style={styles.rateChipText}>🪙 {profile.callRate} Coins / Min</Text>
-              </View>
             </View>
-
-            <Animated.View style={[styles.avatarPulseRing, { transform: [{ scale: pulseAnim }] }]}>
-              <Image source={{ uri: profile.avatar }} style={styles.ringingAvatar} />
-            </Animated.View>
-
-            <View style={styles.ringingBottom}>
-              <TouchableOpacity
-                style={styles.hangupButtonLarge}
-                onPress={() => router.back()}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-              </TouchableOpacity>
-              <Text style={styles.cancelCallText}>Cancel</Text>
+            <View style={styles.rateChip}>
+              <CoinIcon size={14} style={{ marginRight: 6 }} />
+              <Text style={styles.rateChipText}>{profile.callRate} Coins / Min</Text>
             </View>
-          </SafeAreaView>
-        </View>
+          </View>
+
+          {/* Bottom Cancel & Status */}
+          <View style={styles.ringingBottom}>
+            <Text style={styles.handshakeText}>Connecting secure audio & video stream...</Text>
+            <TouchableOpacity
+              style={styles.hangupButtonLarge}
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+            <Text style={styles.cancelCallText}>Decline Call</Text>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -199,51 +551,117 @@ export default function VideoCallScreen() {
   if (callState === 'ended') {
     const totalSpent = Math.max(1, Math.ceil(callSeconds / 60)) * profile.callRate;
     return (
-      <View style={styles.endedContainer}>
-        <SafeAreaView style={styles.endedContent} edges={['top', 'bottom']}>
-          <Image source={{ uri: profile.avatar }} style={styles.endedAvatar} />
-          <Text style={styles.endedTitle}>Call Ended</Text>
-          <Text style={styles.endedName}>with {profile.name}</Text>
+      <AppBackground>
+        <View style={[styles.endedContainer, { backgroundColor: 'transparent' }]}>
+          <SafeAreaView style={styles.endedContent} edges={['top', 'bottom']}>
+            <Image source={{ uri: profile.avatar }} style={styles.endedAvatar} />
+            <Text style={[styles.endedTitle, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+              Call Ended
+            </Text>
+            <Text style={[styles.endedName, { color: isDark ? '#dfbec6' : '#6B7280' }]}>
+              with {profile.name}
+            </Text>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Duration</Text>
-              <Text style={styles.summaryValue}>{formatTime(callSeconds)}</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Coins Spent</Text>
-              <Text style={styles.summaryValueCoins}>🪙 {callSeconds > 0 ? totalSpent : 0}</Text>
-            </View>
-          </View>
-
-          <View style={styles.endedBtnCol}>
-            <TouchableOpacity
-              style={styles.chatCTA}
-              onPress={() => {
-                router.replace(`/chat/${profile.id}` as any);
-              }}
-              activeOpacity={0.85}
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: isDark ? 'rgba(30, 32, 32, 0.70)' : '#FFFFFF',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                  borderWidth: 1,
+                },
+              ]}
             >
-              <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
-              <Text style={styles.chatCTAText}>Message {profile.name}</Text>
-            </TouchableOpacity>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#A68990' : '#6B7280' }]}>
+                  Duration
+                </Text>
+                <Text style={[styles.summaryValue, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+                  {formatTime(callSeconds)}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.summaryDivider,
+                  { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' },
+                ]}
+              />
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: isDark ? '#A68990' : '#6B7280' }]}>
+                  Coins Spent
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <CoinIcon size={14} color={isDark ? '#FFD700' : '#D97706'} />
+                  <Text style={[styles.summaryValueCoins, { color: isDark ? '#FFD700' : '#D97706' }]}>
+                    {callSeconds > 0 ? totalSpent : 0}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
-            <TouchableOpacity
-              style={styles.doneBtn}
-              onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.doneBtnText}>Back to Discover</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </View>
+            <View style={styles.endedBtnCol}>
+              <TouchableOpacity
+                style={styles.chatCTA}
+                onPress={() => {
+                  router.replace(`/chat/${profile.id}` as any);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
+                <Text style={styles.chatCTAText}>Message {profile.name}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.doneBtn,
+                  {
+                    backgroundColor: isDark ? '#2D3030' : '#F1F3F5',
+                    borderColor: isDark ? 'transparent' : 'rgba(0, 0, 0, 0.06)',
+                    borderWidth: isDark ? 0 : 1,
+                  },
+                ]}
+                onPress={() => router.back()}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.doneBtnText, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+                  Back to Discover
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+
+          {/* Coins Depleted Modal (Custom AppModal, replaces native Alert) */}
+          <AppModal
+            visible={coinsDepletedModalVisible}
+            onClose={() => setCoinsDepletedModalVisible(false)}
+            title="Coins Depleted"
+            description="Your coin balance ran out during the call. Recharge now to continue your private video connections!"
+            icon="wallet-outline"
+            iconColor="#FFD700"
+            primaryAction={{
+              label: 'Recharge Now',
+              onPress: () => {
+                setCoinsDepletedModalVisible(false);
+                setRechargeModalVisible(true);
+              },
+            }}
+            secondaryAction={{
+              label: 'View Summary',
+              onPress: () => setCoinsDepletedModalVisible(false),
+            }}
+          />
+
+          <RechargeModal
+            visible={rechargeModalVisible}
+            onClose={() => setRechargeModalVisible(false)}
+          />
+        </View>
+      </AppBackground>
     );
   }
 
   // -------------------------------------------------------------
-  // LIVE VIDEO CALL (1:1 STITCH EXACT)
+  // LIVE VIDEO CALL (STITCH PREMIUM SCREEN WITH CELEBRATION)
   // -------------------------------------------------------------
   return (
     <View style={styles.container}>
@@ -256,58 +674,43 @@ export default function VideoCallScreen() {
         nativeControls={false}
       />
 
-      {/* Dark Vignettes */}
-      <View style={styles.topVignette} />
-      <View style={styles.bottomVignette} />
+      {/* Top and Bottom Linear Gradients (Enhanced Depth & Richness) */}
+      <LinearGradient
+        colors={['rgba(0, 0, 0, 0.88)', 'rgba(0, 0, 0, 0.55)', 'rgba(0, 0, 0, 0.20)', 'transparent']}
+        style={styles.stitchTopGradient}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={['transparent', 'rgba(0, 0, 0, 0.25)', 'rgba(0, 0, 0, 0.65)', 'rgba(0, 0, 0, 0.94)']}
+        style={styles.stitchBottomGradient}
+        pointerEvents="none"
+      />
 
-      {/* Top Header & Timer (Stitch Exact) with native BlurView */}
-      <SafeAreaView style={styles.callHeader} edges={['top']}>
-        <BackButton onPress={handleEndCall} />
 
-        {/* Timer / Credit Display */}
-        <BlurView intensity={70} tint="dark" style={styles.timerCreditDisplay}>
-          <View style={styles.pulsingNeonDot} />
-          <Text style={styles.timerDisplayText}>{formatTime(callSeconds)}</Text>
-          <Text style={styles.tokenIcon}>🪙</Text>
-        </BlurView>
 
-        <TouchableOpacity
-          style={styles.glassHeaderWrap}
-          onPress={() => setRechargeModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <BlurView intensity={60} tint="dark" style={styles.glassHeaderBtn}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={StitchTheme.colors.onSurface} />
-          </BlurView>
-        </TouchableOpacity>
-      </SafeAreaView>
-
-      {/* Self View (Picture-in-Picture) Stitch Exact */}
-      <View style={styles.pipContainer}>
-        {permission?.granted ? (
-          <CameraView style={styles.pipCamera} facing={cameraFacing} />
-        ) : (
-          <View style={styles.pipFallback}>
-            <Ionicons name="person" size={28} color="#FFF" />
-            <Text style={styles.pipFallbackText}>You</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Floating Gift Animations */}
+      {/* Floating Reactions Rising from Random Points across the Bottom */}
       <View style={styles.floatingContainer} pointerEvents="none">
         {floatingGifts.map((gift) => {
           const translateY = gift.anim.interpolate({
             inputRange: [0, 1],
-            outputRange: [0, -320],
+            outputRange: [0, -620],
+          });
+          const translateX = gift.anim.interpolate({
+            inputRange: [0, 0.3, 0.6, 1],
+            outputRange: [
+              gift.startX,
+              gift.startX + gift.swayAmount,
+              gift.startX - gift.swayAmount * 0.6,
+              gift.startX + gift.swayAmount * 0.8,
+            ],
           });
           const opacity = gift.anim.interpolate({
-            inputRange: [0, 0.2, 0.8, 1],
-            outputRange: [0, 1, 1, 0],
+            inputRange: [0, 0.1, 0.75, 1],
+            outputRange: [0, 1, 0.95, 0],
           });
           const scale = gift.anim.interpolate({
-            inputRange: [0, 0.3, 1],
-            outputRange: [0.6, 1.3, 1],
+            inputRange: [0, 0.15, 1],
+            outputRange: [0.3, gift.scale, gift.scale * 1.15],
           });
 
           return (
@@ -316,7 +719,7 @@ export default function VideoCallScreen() {
               style={[
                 styles.floatingGift,
                 {
-                  transform: [{ translateY }, { translateX: gift.xOffset }, { scale }],
+                  transform: [{ translateY }, { translateX }, { scale }],
                   opacity,
                 },
               ]}
@@ -327,79 +730,350 @@ export default function VideoCallScreen() {
         })}
       </View>
 
-      {/* User Info Overlay (Stitch Exact: Name, Age, Location, Tags) */}
-      <View style={[styles.userInfoOverlay, { bottom: Math.max(insets.bottom, 16) + 95 }]}>
-        <Text style={styles.userNameDisplay}>
-          {profile.name} <Text style={styles.userAgeDisplay}>{profile.age}</Text>
-        </Text>
+      {/* Live Stream In-Call Chat Messages (Animates Upward Directly from Top of Input) */}
+      <View
+        style={[
+          styles.liveChatContainer,
+          {
+            bottom: (keyboardHeight > 0 ? keyboardHeight + 28 : Math.max(insets.bottom, 16) + 12) + 60,
+          },
+        ]}
+        pointerEvents="none"
+      >
+        {centerMessages.map((msg) => {
+          const translateY = msg.anim.interpolate({
+            inputRange: [0, 0.12, 0.45, 0.8, 1],
+            outputRange: [0, -35, -110, -220, -320],
+          });
+          const opacity = msg.anim.interpolate({
+            inputRange: [0, 0.08, 0.85, 1],
+            outputRange: [0, 1, 1, 0],
+          });
+          const scale = msg.anim.interpolate({
+            inputRange: [0, 0.1, 0.85, 1],
+            outputRange: [0.85, 1, 0.98, 0.92],
+          });
 
-        <View style={styles.userLocationRow}>
-          <Ionicons name="location-sharp" size={15} color={StitchTheme.colors.onSurfaceVariant} />
-          <Text style={styles.userLocationText}>
-            {profile.city}, {profile.country}
-          </Text>
-        </View>
+          return (
+            <Animated.View
+              key={msg.id}
+              style={[
+                styles.liveChatPill,
+                {
+                  transform: [{ translateY }, { scale }],
+                  opacity,
+                },
+              ]}
+            >
+              <Text style={styles.liveChatContent}>{msg.text}</Text>
+            </Animated.View>
+          );
+        })}
+      </View>
 
-        {/* Tags */}
-        <View style={styles.callTagsRow}>
-          {profile.interests.map((tag, idx) => (
-            <View key={idx} style={styles.callTagChip}>
-              <Text style={styles.callTagText}>{tag}</Text>
+      {/* Top Header: Full-Width Info Card & Floating Camera Below on Right */}
+      <SafeAreaView style={styles.topSafeArea} edges={['top']}>
+        {/* Full-Width Female Info Card with Real Frosted Blur & No Border */}
+        <BlurView
+          intensity={Platform.OS === 'android' ? 85 : 65}
+          tint="dark"
+          style={styles.fullWidthInfoCard}
+        >
+          <TouchableOpacity
+            style={styles.infoCardAvatarWrap}
+            onPress={() => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch (e) {}
+              setProfileModalVisible(true);
+            }}
+            activeOpacity={0.85}
+          >
+            <Image source={{ uri: profile.avatar }} style={styles.infoCardAvatar} />
+          </TouchableOpacity>
+
+          <View style={styles.infoCardTextCol}>
+            <Text style={styles.infoCardName} numberOfLines={1}>
+              {profile.name}, {profile.age}
+            </Text>
+            <View style={styles.infoCardLocationRow}>
+              <Ionicons name="location-sharp" size={13} color="#dfbec6" />
+              <Text style={styles.infoCardLocationText} numberOfLines={1}>
+                {profile.city}, {profile.country}
+              </Text>
             </View>
-          ))}
+          </View>
+
+          {/* Profile Details Button (Opens In-Call Modal to preserve active call) */}
+          <TouchableOpacity
+            style={styles.viewProfileBtn}
+            onPress={() => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch (e) {}
+              setProfileModalVisible(true);
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="person-circle-outline" size={16} color="#FFF" />
+            <Text style={styles.viewProfileBtnText}>Profile</Text>
+          </TouchableOpacity>
+        </BlurView>
+
+        {/* Floating Self Camera Preview (Below Info Card on the Right) */}
+        <View style={styles.cameraPreviewContainer}>
+          <View style={styles.stitchSelfPreviewCard}>
+            {permission?.granted ? (
+              <CameraView style={styles.stitchSelfCamera} facing={cameraFacing} />
+            ) : (
+              <View style={styles.stitchSelfFallback}>
+                <Ionicons name="person" size={26} color="#dfbec6" />
+                <Text style={styles.stitchSelfFallbackText}>You</Text>
+              </View>
+            )}
+          </View>
         </View>
+      </SafeAreaView>
+
+      {/* Bottom Controls & Chat Bar with Safe Keyboard Avoidance Gap */}
+      <View
+        style={[
+          styles.bottomControlsWrap,
+          {
+            bottom: keyboardHeight > 0 ? keyboardHeight + 28 : Math.max(insets.bottom, 16) + 12,
+          },
+        ]}
+      >
+        {/* Row of 4 Stitch Action Buttons */}
+        <View style={styles.stitchActionRow}>
+          {/* Flip Camera Button with Frosted Blur */}
+          <TouchableOpacity
+            style={styles.stitchCircleGlassBtn}
+            onPress={() => setCameraFacing(cameraFacing === 'front' ? 'back' : 'front')}
+            activeOpacity={0.8}
+          >
+            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
+              <Ionicons name="camera-reverse-outline" size={24} color="#e2e2e2" />
+            </BlurView>
+          </TouchableOpacity>
+
+          {/* Send Gift Button with Frosted Blur */}
+          <TouchableOpacity
+            style={styles.stitchCircleGlassBtn}
+            onPress={() => setGiftModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
+              <Ionicons name="gift" size={26} color="#f65592" />
+            </BlurView>
+          </TouchableOpacity>
+
+          {/* End Call Red Button */}
+          <TouchableOpacity
+            style={styles.stitchEndCallBtn}
+            onPress={handleEndCall}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="call"
+              size={36}
+              color="#FFFFFF"
+              style={{ transform: [{ rotate: '135deg' }] }}
+            />
+          </TouchableOpacity>
+
+          {/* Mic Toggle with Frosted Blur */}
+          <TouchableOpacity
+            style={styles.stitchCircleGlassBtn}
+            onPress={() => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch (e) {}
+              setIsMuted((prev) => !prev);
+            }}
+            activeOpacity={0.8}
+          >
+            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
+              <Ionicons
+                name={isMuted ? 'mic-off' : 'mic'}
+                size={24}
+                color={isMuted ? '#f65592' : '#e2e2e2'}
+              />
+            </BlurView>
+          </TouchableOpacity>
+        </View>
+
+        {/* Floating Emoji Picker Bar with Dedicated Close Button */}
+        {showEmojiPicker && (
+          <AppBlurView style={styles.emojiPickerBar} tint="dark">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.emojiPickerScroll}
+            >
+              {EMOJI_REACTIONS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={() => handleSendReaction(emoji)}
+                  style={styles.emojiBtnItem}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.emojiChar}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.emojiPickerCloseBtn}
+              onPress={() => setShowEmojiPicker(false)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-circle" size={24} color="#dfbec6" />
+            </TouchableOpacity>
+          </AppBlurView>
+        )}
+
+        {/* Bottom Chat Input Bar with Frosted Blur & Safe Keyboard Gap */}
+        <BlurView intensity={Platform.OS === 'android' ? 85 : 70} tint="dark" style={styles.stitchChatInputBar}>
+          <TouchableOpacity
+            style={styles.stitchEmojiBtn}
+            onPress={() => {
+              setShowEmojiPicker((prev) => !prev);
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch (e) {}
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="happy-outline" size={22} color={showEmojiPicker ? '#f65592' : '#dfbec6'} />
+          </TouchableOpacity>
+
+          <TextInput
+            style={styles.stitchChatTextInput}
+            placeholder="Say something nice..."
+            placeholderTextColor="rgba(223, 190, 198, 0.55)"
+            value={chatText}
+            onChangeText={setChatText}
+            returnKeyType="send"
+            onSubmitEditing={handleSendMessage}
+          />
+
+          <TouchableOpacity
+            style={styles.stitchSendBtn}
+            onPress={handleSendMessage}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="send" size={17} color="#FFF" />
+          </TouchableOpacity>
+        </BlurView>
       </View>
 
-      {/* Bottom Controls (1:1 Stitch Exact: Like | Chat | Send Gift (Emphasized) | Flip Camera | End Call) */}
-      <View style={[styles.bottomControlsBar, { bottom: Math.max(insets.bottom, 16) + 12 }]}>
-        {/* Like */}
-        <TouchableOpacity style={styles.glassControlWrap} activeOpacity={0.8}>
-          <BlurView intensity={65} tint="dark" style={styles.glassControlBtn}>
-            <Ionicons name="heart" size={24} color={StitchTheme.colors.onSurface} />
-          </BlurView>
-        </TouchableOpacity>
+      {/* Gift Celebration Overlay: Travel from Bottom, Box Opens & Reveals Gift */}
+      {activeCelebration && (
+        <View style={styles.celebrationOverlay} pointerEvents="none">
+          {/* Animated Container Traveling from Bottom to Center */}
+          <Animated.View
+            style={[
+              styles.justTheGiftWrap,
+              {
+                transform: [
+                  {
+                    translateY: giftTravelAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [420, 0],
+                    }),
+                  },
+                ],
+                opacity: giftExitAnim,
+              },
+            ]}
+          >
+            {/* STAGE 1: The Gift Box (travels up small -> 50% at center with gentle tilt) */}
+            <Animated.View
+              style={[
+                styles.giftBoxLayer,
+                {
+                  transform: [
+                    {
+                      scale: giftTravelAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.22, 0.5],
+                      }),
+                    },
+                    {
+                      rotate: giftTravelAnim.interpolate({
+                        inputRange: [0, 0.4, 0.8, 1],
+                        outputRange: ['-12deg', '10deg', '-4deg', '0deg'],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              {/* STAGE 2: Gift box bursts open & fades out when opening */}
+              <Animated.View
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transform: [
+                    {
+                      scale: boxOpenAnim.interpolate({
+                        inputRange: [0, 0.6, 1],
+                        outputRange: [1, 1.25, 1.5],
+                      }),
+                    },
+                  ],
+                  opacity: boxOpenAnim.interpolate({
+                    inputRange: [0, 0.45, 1],
+                    outputRange: [1, 0.85, 0],
+                  }),
+                }}
+              >
+                <Text style={styles.giftBoxEmoji}>🎁</Text>
+              </Animated.View>
+            </Animated.View>
 
-        {/* Chat */}
-        <TouchableOpacity
-          style={styles.glassControlWrap}
-          onPress={() => router.push(`/chat/${profile.id}` as any)}
-          activeOpacity={0.8}
-        >
-          <BlurView intensity={65} tint="dark" style={styles.glassControlBtn}>
-            <Ionicons name="chatbubble" size={22} color={StitchTheme.colors.onSurface} />
-            <View style={styles.chatBadgeDot} />
-          </BlurView>
-        </TouchableOpacity>
-
-        {/* Send Gift - Emphasized with Neon Magenta */}
-        <TouchableOpacity
-          style={styles.neonGiftBtn}
-          onPress={() => setGiftModalVisible(true)}
-          activeOpacity={0.85}
-        >
-          <Text style={{ fontSize: 28 }}>🎁</Text>
-        </TouchableOpacity>
-
-        {/* Flip Camera */}
-        <TouchableOpacity
-          style={styles.glassControlWrap}
-          onPress={() => setCameraFacing(cameraFacing === 'front' ? 'back' : 'front')}
-          activeOpacity={0.8}
-        >
-          <BlurView intensity={65} tint="dark" style={styles.glassControlBtn}>
-            <Ionicons name="camera-reverse" size={24} color={StitchTheme.colors.onSurface} />
-          </BlurView>
-        </TouchableOpacity>
-
-        {/* End Call */}
-        <TouchableOpacity
-          style={styles.endCallRedBtn}
-          onPress={handleEndCall}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="close" size={26} color="#FFF" />
-        </TouchableOpacity>
-      </View>
+            {/* STAGE 2: The Inner Revealed Gift (springs from 50% to full 100% size upon opening) */}
+            <Animated.View
+              style={[
+                styles.revealedGiftLayer,
+                {
+                  transform: [
+                    {
+                      scale: giftRevealAnim.interpolate({
+                        inputRange: [0, 0.7, 1, 1.15],
+                        outputRange: [0.5, 1.15, 1.0, 1.12],
+                      }),
+                    },
+                    {
+                      translateY: giftRevealAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [14, 0],
+                      }),
+                    },
+                  ],
+                  opacity: boxOpenAnim.interpolate({
+                    inputRange: [0, 0.25, 1],
+                    outputRange: [0, 0.9, 1],
+                  }),
+                },
+              ]}
+            >
+              {/* Back ambient colored glow */}
+              <View
+                style={[
+                  styles.giftGlowCircle,
+                  {
+                    backgroundColor: activeCelebration.accentColor
+                      ? `${activeCelebration.accentColor}40`
+                      : 'rgba(246, 85, 146, 0.40)',
+                  },
+                ]}
+              />
+              <Text style={styles.justTheGiftEmoji}>{activeCelebration.emoji}</Text>
+            </Animated.View>
+          </Animated.View>
+        </View>
+      )}
 
       <GiftModal
         visible={giftModalVisible}
@@ -412,6 +1086,114 @@ export default function VideoCallScreen() {
         visible={rechargeModalVisible}
         onClose={() => setRechargeModalVisible(false)}
       />
+
+      {/* Compact In-Call Profile Modal (Exactly what is shown on profile details screen) */}
+      <Modal
+        visible={profileModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProfileModalVisible(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.compactProfileBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setProfileModalVisible(false)}
+          />
+
+          <View style={styles.compactProfileContent}>
+            {/* The Compact Profile Card */}
+            <View style={styles.compactProfileCard}>
+              <Image
+                source={{ uri: selectedModalPhoto || profile.avatar }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
+
+              {/* Top Row: Close button on left, Status badge on right */}
+              <View style={styles.compactTopRow}>
+                <TouchableOpacity
+                  style={styles.compactCloseBtn}
+                  onPress={() => setProfileModalVisible(false)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="close" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <View
+                  style={[
+                    styles.compactStatusBadge,
+                    { backgroundColor: profile.isOnline ? '#10B981' : '#E11D48' },
+                  ]}
+                >
+                  <Text style={styles.compactStatusText}>
+                    {profile.isOnline ? 'Online' : 'Busy'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Bottom Glassmorphic Overlay: Name, Age, Location, Bio */}
+              <View style={styles.compactGlassOverlay}>
+                <LinearGradient
+                  colors={['transparent', 'rgba(234, 76, 137, 0.5)', 'rgba(234, 76, 137, 0.95)']}
+                  locations={[0, 0.45, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.compactInfoContent}>
+                  <Text style={styles.compactNameHeading}>
+                    {profile.name}, {profile.age}
+                  </Text>
+
+                  <View style={styles.compactLocationLine}>
+                    <Ionicons name="location-sharp" size={14} color="#FFF" />
+                    <Text style={styles.compactLocationText}>
+                      {profile.city}, {profile.country}
+                    </Text>
+                  </View>
+
+                  {profile.bio ? (
+                    <Text style={styles.compactBioText} numberOfLines={2}>
+                      {profile.bio}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+
+            {/* Horizontal Thumbnail Gallery below the card */}
+            <View style={styles.compactThumbWrap}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.compactThumbScroll}
+              >
+                {[profile.avatar, ...(profile.photos || [])].map((uri, idx) => {
+                  const isSelected = (selectedModalPhoto || profile.avatar) === uri;
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.compactThumbBtn,
+                        isSelected ? styles.compactThumbActive : styles.compactThumbInactive,
+                      ]}
+                      onPress={() => {
+                        try {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        } catch (e) {}
+                        setSelectedModalPhoto(uri);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Image source={{ uri }} style={styles.compactThumbImg} resizeMode="cover" />
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -419,389 +1201,670 @@ export default function VideoCallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: StitchTheme.colors.midnightVoid,
+    backgroundColor: '#121414',
   },
-  topVignette: {
+  stitchTopGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 160,
-    backgroundColor: 'rgba(5, 5, 10, 0.65)',
+    height: 230,
   },
-  bottomVignette: {
+  stitchBottomGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 240,
-    backgroundColor: 'rgba(5, 5, 10, 0.75)',
+    height: 350,
   },
-  callHeader: {
+
+  // Top Area
+  topSafeArea: {
     position: 'absolute',
-    top: 10,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  glassHeaderWrap: {
-    borderRadius: 21,
-    overflow: 'hidden',
-  },
-  glassHeaderBtn: {
-    width: 42,
-    height: 42,
-    backgroundColor: 'rgba(30, 32, 32, 0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerCreditDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(30, 32, 32, 0.65)',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 24,
-    overflow: 'hidden',
-    gap: 8,
-    shadowColor: StitchTheme.colors.neonMagenta,
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
-  },
-  pulsingNeonDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: StitchTheme.colors.neonMagenta,
-  },
-  timerDisplayText: {
-    color: StitchTheme.colors.onSurface,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  tokenIcon: {
-    fontSize: 14,
-  },
-  pipContainer: {
-    position: 'absolute',
-    top: 90,
-    right: 20,
-    width: 112,
-    height: 160,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: StitchTheme.colors.surfaceContainer,
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  pipCamera: {
-    flex: 1,
-  },
-  pipFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: StitchTheme.colors.surfaceContainerHighest,
-  },
-  pipFallbackText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  floatingContainer: {
-    position: 'absolute',
-    bottom: 150,
+    top: 0,
     left: 0,
     right: 0,
+    zIndex: 20,
+  },
+  fullWidthInfoCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 30,
+    backgroundColor: 'rgba(18, 20, 24, 0.50)',
+    borderWidth: 0,
+    overflow: 'hidden',
+    gap: 12,
+  },
+  infoCardAvatarWrap: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  infoCardAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  infoCardTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  infoCardName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  infoCardLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  infoCardLocationText: {
+    fontSize: 12,
+    color: '#dfbec6',
+    fontWeight: '500',
+  },
+  viewProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f65592',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 18,
+  },
+  viewProfileBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cameraPreviewContainer: {
+    alignSelf: 'flex-end',
+    marginRight: 16,
+    marginTop: 14,
+  },
+
+  // Self Preview
+  stitchSelfPreviewCard: {
+    width: 96,
+    height: 140,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(30, 32, 32, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  stitchSelfCamera: {
+    width: '100%',
+    height: '100%',
+  },
+  stitchSelfFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E2020',
+  },
+  stitchSelfFallbackText: {
+    color: '#dfbec6',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  // Live Gift Celebration Showcase Overlay
+  celebrationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  // Just The Gift Animation
+  justTheGiftWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 240,
+    height: 240,
+  },
+  giftBoxLayer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 170,
+    height: 170,
+  },
+  giftBoxEmoji: {
+    fontSize: 112,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 10 },
+    textShadowRadius: 26,
+  },
+  revealedGiftLayer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 230,
+    height: 230,
+  },
+  giftGlowCircle: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+  },
+  justTheGiftEmoji: {
+    fontSize: 130,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 10 },
+    textShadowRadius: 28,
+  },
+
+  // Floating Reactions from Random Bottom Points
+  floatingContainer: {
+    position: 'absolute',
+    bottom: 90,
+    left: 0,
+    right: 0,
+    height: 650,
+    zIndex: 15,
   },
   floatingGift: {
     position: 'absolute',
+    bottom: 0,
+    left: 0,
   },
   floatingGiftIcon: {
-    fontSize: 48,
-  },
-  userInfoOverlay: {
-    position: 'absolute',
-    bottom: 120,
-    left: 20,
-    right: 20,
-    zIndex: 20,
-    gap: 6,
-  },
-  userNameDisplay: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: StitchTheme.colors.onSurface,
-    letterSpacing: -0.8,
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  userAgeDisplay: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: StitchTheme.colors.onSurfaceVariant,
-  },
-  userLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  userLocationText: {
-    color: StitchTheme.colors.onSurfaceVariant,
-    fontSize: 14,
-  },
-  callTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  callTagChip: {
-    backgroundColor: 'rgba(12, 15, 15, 0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  callTagText: {
-    color: StitchTheme.colors.onSurface,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bottomControlsBar: {
-    position: 'absolute',
-    bottom: 24,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-    zIndex: 30,
-    paddingHorizontal: 20,
-  },
-  glassControlWrap: {
-    borderRadius: 27,
-    overflow: 'hidden',
-  },
-  glassControlBtn: {
-    width: 54,
-    height: 54,
-    backgroundColor: 'rgba(30, 32, 32, 0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  chatBadgeDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: StitchTheme.colors.error,
-  },
-  neonGiftBtn: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: StitchTheme.colors.neonMagenta,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: StitchTheme.colors.neonMagenta,
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  endCallRedBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#E74C3C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#E74C3C',
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    fontSize: 44,
   },
 
-  // Ringing & ended
+  // Live Stream In-Call Chat Messages (Starts from top of input and floats upward)
+  liveChatContainer: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 30,
+    gap: 8,
+  },
+  liveChatPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(18, 16, 22, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 22,
+    maxWidth: '85%',
+  },
+  liveChatContent: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Bottom Controls & Input
+  bottomControlsWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 18,
+    gap: 16,
+    zIndex: 25,
+  },
+  stitchActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 18,
+  },
+  stitchCircleGlassBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+  },
+  stitchCircleBlurInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(30, 32, 32, 0.5)',
+  },
+  stitchEndCallBtn: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#93000a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Stitch Chat Input Bar
+  stitchChatInputBar: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(20, 22, 26, 0.65)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+    borderWidth: 0,
+  },
+  stitchEmojiBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stitchChatTextInput: {
+    flex: 1,
+    color: '#e2e2e2',
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+  },
+  stitchSendBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f65592',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiPickerBar: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(28, 18, 22, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    overflow: 'hidden',
+    paddingVertical: 8,
+    paddingLeft: 6,
+    paddingRight: 10,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emojiPickerScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 6,
+  },
+  emojiPickerCloseBtn: {
+    marginLeft: 6,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiBtnItem: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+  },
+  emojiChar: {
+    fontSize: 20,
+  },
+  floatingGiftEmoji: {
+    fontSize: 40,
+  },
+
+  // Ringing State Styles (Advanced VIP Connection Screen)
   ringingContainer: {
     flex: 1,
-    backgroundColor: StitchTheme.colors.midnightVoid,
-  },
-  ringingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(5, 5, 10, 0.85)',
+    backgroundColor: '#080A0C',
   },
   ringingContent: {
     flex: 1,
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 36,
   },
-  ringingTop: {
+  ringingHeaderSection: {
+    alignItems: 'center',
+    marginTop: 14,
+    gap: 12,
+  },
+  encryptedPill: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  greenLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  encryptedPillText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
   },
   connectingTitle: {
-    color: StitchTheme.colors.neonMagenta,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-  },
-  ringingName: {
-    color: '#FFF',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  ringingLocation: {
-    color: StitchTheme.colors.onSurfaceVariant,
-    fontSize: 14,
-  },
-  rateChip: {
-    marginTop: 8,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 14,
-  },
-  rateChipText: {
-    color: '#FFD700',
-    fontWeight: '700',
+    color: '#f65592',
     fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+  },
+  radarSonarContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 280,
+    height: 280,
+    marginVertical: 10,
+  },
+  sonarRing: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 2,
+    borderColor: 'rgba(246, 85, 146, 0.7)',
   },
   avatarPulseRing: {
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    padding: 6,
-    backgroundColor: 'rgba(246, 85, 146, 0.2)',
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarGradientBorder: {
+    padding: 4,
+    borderRadius: 78,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringingAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 85,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+  },
+  ringingMetaCard: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  ringingNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ringingName: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  ringingLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ringingLocation: {
+    fontSize: 14,
+    color: '#dfbec6',
+    fontWeight: '500',
+  },
+  rateChip: {
+    marginTop: 10,
+    backgroundColor: 'rgba(246, 85, 146, 0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rateChipText: {
+    color: '#FFB1C6',
+    fontSize: 13,
+    fontWeight: '600',
   },
   ringingBottom: {
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
+    marginBottom: 16,
+  },
+  handshakeText: {
+    color: 'rgba(223, 190, 198, 0.75)',
+    fontSize: 12,
+    marginBottom: 16,
+    letterSpacing: 0.5,
   },
   hangupButtonLarge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#E74C3C',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#93000a',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E74C3C',
-    shadowOpacity: 0.6,
+    shadowColor: '#FF2A6D',
+    shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 8,
   },
   cancelCallText: {
-    color: '#FFF',
+    color: '#dfbec6',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    marginTop: 12,
   },
+
+  // Ended State Styles
   endedContainer: {
     flex: 1,
-    backgroundColor: StitchTheme.colors.surface,
+    backgroundColor: '#0C0F10',
     justifyContent: 'center',
   },
   endedContent: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
   },
   endedAvatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    marginBottom: 16,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    marginBottom: 20,
   },
   endedTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFF',
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   endedName: {
-    fontSize: 15,
-    color: StitchTheme.colors.onSurfaceVariant,
-    marginBottom: 26,
+    fontSize: 16,
+    color: '#dfbec6',
+    marginTop: 4,
+    marginBottom: 28,
   },
   summaryCard: {
     width: '100%',
-    backgroundColor: StitchTheme.colors.surfaceContainer,
+    backgroundColor: '#1E2020',
     borderRadius: 20,
     padding: 20,
-    marginBottom: 28,
+    marginBottom: 36,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
   },
   summaryLabel: {
-    color: StitchTheme.colors.onSurfaceVariant,
-    fontSize: 14,
+    fontSize: 15,
+    color: '#dfbec6',
   },
   summaryValue: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  summaryValueCoins: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginVertical: 10,
+    backgroundColor: 'rgba(166, 137, 144, 0.15)',
+    marginVertical: 14,
+  },
+  summaryValueCoins: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFD700',
   },
   endedBtnCol: {
     width: '100%',
     gap: 12,
   },
   chatCTA: {
+    backgroundColor: '#f65592',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: StitchTheme.colors.primaryContainer,
-    borderRadius: 16,
-    paddingVertical: 14,
     gap: 8,
+    paddingVertical: 15,
+    borderRadius: 28,
   },
   chatCTAText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   doneBtn: {
+    backgroundColor: '#282A2B',
+    paddingVertical: 15,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
   },
   doneBtnText: {
-    color: StitchTheme.colors.onSurfaceVariant,
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#dfbec6',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+
+  // Compact In-Call Profile Modal (Matching profile details screen)
+  compactProfileBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  compactProfileContent: {
+    width: '100%',
+    maxWidth: 380,
+    gap: 12,
+  },
+  compactProfileCard: {
+    width: '100%',
+    height: 380,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#1E1822',
+  },
+  compactTopRow: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  compactCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
+  compactStatusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  compactGlassOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    justifyContent: 'flex-end',
+  },
+  compactInfoContent: {
+    padding: 16,
+    gap: 4,
+  },
+  compactNameHeading: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  compactLocationLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactLocationText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  compactBioText: {
+    color: 'rgba(255, 255, 255, 0.92)',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  compactThumbWrap: {
+    width: '100%',
+  },
+  compactThumbScroll: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  compactThumbBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+  compactThumbActive: {
+    borderColor: '#F65592',
+  },
+  compactThumbInactive: {
+    borderColor: 'transparent',
+    opacity: 0.65,
+  },
+  compactThumbImg: {
+    width: '100%',
+    height: '100%',
   },
 });

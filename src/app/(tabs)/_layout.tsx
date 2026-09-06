@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   LayoutChangeEvent,
   StyleSheet,
   TouchableOpacity,
@@ -11,33 +12,41 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppBlurView from '../../components/AppBlurView';
-import { StitchTheme } from '../../constants/theme';
+import { AppBlurConfig } from '../../constants/blurConfig';
 import { TabBlurProvider, useTabBlur } from '../../context/TabBlurContext';
+import { useTheme } from '../../context/ThemeContext';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const [tabBarWidth, setTabBarWidth] = useState(340);
+  const { isDark } = useTheme();
+  const { targets, tabVersion } = useTabBlur();
 
-  // Animated sliding indicator position
-  const indicatorAnim = useRef(new Animated.Value(state.index)).current;
+  // Compute exact geometry so from frame 0 there is never a width mismatch
+  const defaultBarWidth = Math.min(390, SCREEN_WIDTH * 0.92);
+  const [tabBarWidth, setTabBarWidth] = useState(defaultBarWidth);
+
   const numTabs = state.routes.length;
-  const containerPadding = 12;
+  const containerPadding = 12; // 6px each side
   const usableWidth = Math.max(0, tabBarWidth - containerPadding);
   const slotWidth = numTabs > 0 ? usableWidth / numTabs : 100;
   const indicatorPillWidth = Math.max(48, slotWidth - 6);
 
+  const indicatorAnim = useRef(new Animated.Value(state.index)).current;
+
   useEffect(() => {
     Animated.spring(indicatorAnim, {
       toValue: state.index,
-      friction: 8,
-      tension: 65,
+      friction: 9,
+      tension: 70,
       useNativeDriver: true,
     }).start();
   }, [state.index]);
 
   const onPillLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
-    if (w > 0 && Math.abs(w - tabBarWidth) > 2) {
+    if (w > 0 && Math.abs(w - tabBarWidth) > 1) {
       setTabBarWidth(w);
     }
   };
@@ -45,17 +54,19 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
   const translateX = indicatorAnim.interpolate({
     inputRange: state.routes.map((_: any, i: number) => i),
     outputRange: state.routes.map((_: any, i: number) => {
-      // Center the wide indicator pill inside each slot
       const slotCenter = i * slotWidth + slotWidth / 2;
       return slotCenter - indicatorPillWidth / 2;
     }),
   });
 
-  const TAB_LABELS: Record<string, { label: string; icon: any; iconOutline: any }> = {
-    index: { label: 'Discover', icon: 'heart', iconOutline: 'heart-outline' },
-    history: { label: 'Messages', icon: 'chatbubbles', iconOutline: 'chatbubbles-outline' },
-    profile: { label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
+  const TAB_ICONS: Record<string, { icon: any; iconOutline: any }> = {
+    index: { icon: 'heart', iconOutline: 'heart-outline' },
+    history: { icon: 'chatbubbles', iconOutline: 'chatbubbles-outline' },
+    profile: { icon: 'person', iconOutline: 'person-outline' },
   };
+
+  const currentRouteName = (state.routes[state.index]?.name || 'index') as keyof typeof targets;
+  const currentBlurTarget = targets[currentRouteName] || targets.index;
 
   return (
     <View
@@ -68,7 +79,18 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
       pointerEvents="box-none"
     >
       <AppBlurView
-        style={styles.floatingGlassPill}
+        key={`bottom-tab-blur-${isDark ? 'dark' : 'light'}`}
+        style={[
+          styles.floatingGlassPill,
+          {
+            backgroundColor: isDark
+              ? 'rgba(20, 14, 18, 0.45)'
+              : 'rgba(255, 255, 255, 0.65)',
+          },
+        ]}
+        blurTarget={currentBlurTarget}
+        intensity={AppBlurConfig.intensity}
+        tint={isDark ? 'dark' : 'light'}
         onLayout={onPillLayout}
       >
         {/* Animated Sliding Wide Pill */}
@@ -82,10 +104,10 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
           ]}
         />
 
+        {/* Tab Items with flex: 1 for perfectly symmetrical edge-to-edge layout */}
         {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
-          const meta = TAB_LABELS[route.name] || {
-            label: route.name,
+          const meta = TAB_ICONS[route.name] || {
             icon: 'ellipse',
             iconOutline: 'ellipse-outline',
           };
@@ -111,23 +133,20 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
               key={route.key}
               onPress={onPress}
               activeOpacity={0.85}
-              style={[styles.tabSlot, { width: slotWidth }]}
+              style={styles.tabSlot}
             >
               <View style={styles.tabPillContent}>
                 <Ionicons
                   name={isFocused ? meta.icon : meta.iconOutline}
-                  size={19}
-                  color={isFocused ? '#FFFFFF' : 'rgba(241, 224, 228, 0.65)'}
+                  size={23}
+                  color={
+                    isFocused
+                      ? '#FFFFFF'
+                      : isDark
+                      ? 'rgba(241, 224, 228, 0.70)'
+                      : 'rgba(50, 50, 55, 0.75)'
+                  }
                 />
-                <Animated.Text
-                  style={[
-                    styles.tabLabelText,
-                    isFocused ? styles.tabLabelTextActive : styles.tabLabelTextInactive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {meta.label}
-                </Animated.Text>
               </View>
             </TouchableOpacity>
           );
@@ -144,7 +163,8 @@ export default function TabLayout() {
         tabBar={(props) => <FloatingGlassTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          animation: 'shift', // Moving animation when changing tabs
+          animation: 'none',
+          lazy: false,
         }}
       >
         <Tabs.Screen name="index" options={{ title: 'Discover' }} />
@@ -166,18 +186,12 @@ const styles = StyleSheet.create({
   floatingGlassPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '94%',
-    maxWidth: 420,
+    width: '92%',
+    maxWidth: 390,
     height: 58,
     borderRadius: 30,
     overflow: 'hidden',
-    backgroundColor: 'rgba(28, 18, 22, 0.72)',
     paddingHorizontal: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 12,
     position: 'relative',
   },
   slidingGlowPill: {
@@ -186,12 +200,9 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: '#F65592',
-    shadowColor: '#F65592',
-    shadowOpacity: 0.75,
-    shadowRadius: 14,
-    elevation: 8,
   },
   tabSlot: {
+    flex: 1,
     height: 58,
     alignItems: 'center',
     justifyContent: 'center',
@@ -201,18 +212,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
-  },
-  tabLabelText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabLabelTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  tabLabelTextInactive: {
-    color: 'rgba(241, 224, 228, 0.65)',
   },
 });

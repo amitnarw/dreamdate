@@ -3,8 +3,10 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
 import {
-  Alert,
+  Dimensions,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,13 +14,21 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import AppModal from './AppModal';
+import CoinIcon from './CoinIcon';
+import { useTheme } from '../context/ThemeContext';
 import { VIRTUAL_GIFTS, VirtualGift } from '../data/mockProfiles';
 import { deductCoins, useWallet } from '../services/wallet';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// 3 columns: total horizontal padding is 36 (18 each side), 2 gaps of 8 each = 16
+const CARD_WIDTH = Math.floor((SCREEN_WIDTH - 36 - 16) / 3);
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onGiftSent: (gift: { name: string; icon: string; coins: number }) => void;
+  onGiftSent: (gift: { name: string; icon: string; emoji?: string; coins: number; accentColor?: string }) => void;
   onNeedRecharge: () => void;
 }
 
@@ -28,29 +38,53 @@ const GIFT_GROUPS: Array<{
   category: VirtualGift['category'];
   label: string;
   badge: string;
+  badgeIcon: keyof typeof Ionicons.glyphMap;
 }> = [
-  { category: 'Popular', label: 'Popular Treats', badge: '🔥 Trending' },
-  { category: 'Romance', label: 'Romance & Love', badge: '💖 Romantic' },
-  { category: 'Luxury', label: 'Luxury & Glamour', badge: '💎 High Roller' },
-  { category: 'VIP', label: 'Ultra VIP Exclusives', badge: '👑 VIP Only' },
+  { category: 'Popular', label: 'Popular Treats', badge: 'Trending', badgeIcon: 'flame' },
+  { category: 'Romance', label: 'Romance & Love', badge: 'Romantic', badgeIcon: 'heart' },
+  { category: 'Luxury', label: 'Luxury & Glamour', badge: 'High Roller', badgeIcon: 'diamond' },
+  { category: 'VIP', label: 'Ultra VIP Exclusives', badge: 'VIP Only', badgeIcon: 'ribbon' },
 ];
 
 export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge }: Props) {
   const { coins } = useWallet();
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
   const [activeCategory, setActiveCategory] = useState<VirtualGift['category']>('Popular');
   const [selectedGift, setSelectedGift] = useState<VirtualGift>(VIRTUAL_GIFTS[0]);
+  const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
+  const [pendingGift, setPendingGift] = useState<VirtualGift | null>(null);
 
   const scrollRef = React.useRef<ScrollView>(null);
   const groupPositions = React.useRef<{ [key: string]: number }>({}).current;
+  const isProgrammaticScroll = React.useRef(false);
 
   const scrollToGroup = (cat: VirtualGift['category']) => {
     setActiveCategory(cat);
+    isProgrammaticScroll.current = true;
     const y = groupPositions[cat] ?? 0;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 6), animated: true });
+    setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 450);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (e) {}
+  };
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (isProgrammaticScroll.current) return;
+    const scrollY = e.nativeEvent.contentOffset.y;
+    let currentCat: VirtualGift['category'] = 'Popular';
+    for (const group of GIFT_GROUPS) {
+      const pos = groupPositions[group.category];
+      if (pos !== undefined && scrollY >= pos - 30) {
+        currentCat = group.category;
+      }
+    }
+    if (currentCat !== activeCategory) {
+      setActiveCategory(currentCat);
+    }
   };
 
   const handleSelectGift = (gift: VirtualGift) => {
@@ -62,25 +96,22 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
   };
 
   const handleSendGift = async (giftToSend: VirtualGift) => {
+    if (coins < giftToSend.coins) {
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } catch (e) {}
+      setPendingGift(giftToSend);
+      setInsufficientModalVisible(true);
+      return;
+    }
+
     const success = await deductCoins(giftToSend.coins);
     if (!success) {
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } catch (e) {}
-      Alert.alert(
-        'Insufficient Coins! 🪙',
-        `You need ${giftToSend.coins.toLocaleString()} coins to send ${giftToSend.name}. Would you like to recharge your wallet?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Recharge Now',
-            onPress: () => {
-              onClose();
-              onNeedRecharge();
-            },
-          },
-        ]
-      );
+      setPendingGift(giftToSend);
+      setInsufficientModalVisible(true);
       return;
     }
 
@@ -93,33 +124,75 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetWrap}>
+        <View
+          style={[
+            styles.sheetWrap,
+            {
+              backgroundColor: isDark
+                ? 'rgba(24, 18, 20, 0.98)'
+                : 'rgba(255, 255, 255, 0.98)',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(0, 0, 0, 0.06)',
+            },
+          ]}
+        >
           <BlurView
             intensity={85}
-            tint="dark"
+            tint={isDark ? 'dark' : 'light'}
             style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 10 }]}
           >
             {/* Header: Title + Coin Balance + Recharge Button */}
             <View style={styles.header}>
               <View style={styles.headerTitleCol}>
-                <Text style={styles.title}>Send Virtual Gift 🎁</Text>
-                <Text style={styles.subtitle}>Make her feel extra special</Text>
+                <Text
+                  style={[
+                    styles.title,
+                    { color: isDark ? '#F1E0E4' : '#191C1D' },
+                  ]}
+                >
+                  Send Virtual Gift
+                </Text>
+                <Text
+                  style={[
+                    styles.subtitle,
+                    { color: isDark ? 'rgba(241, 224, 228, 0.65)' : '#6B7280' },
+                  ]}
+                >
+                  Make her feel extra special
+                </Text>
               </View>
 
               <View style={styles.headerRightRow}>
                 {/* Balance Pill */}
                 <TouchableOpacity
-                  style={styles.balancePill}
+                  style={[
+                    styles.balancePill,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 215, 0, 0.15)'
+                        : 'rgba(245, 158, 11, 0.12)',
+                    },
+                  ]}
                   onPress={() => {
                     onClose();
-                    onNeedRecharge();
+                    setTimeout(() => {
+                      onNeedRecharge();
+                    }, 220);
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.balanceIcon}>🪙</Text>
-                  <Text style={styles.balanceText}>{coins.toLocaleString()}</Text>
+                  <CoinIcon size={14} color={isDark ? '#FFD700' : '#D97706'} />
+                  <Text
+                    style={[
+                      styles.balanceText,
+                      { color: isDark ? '#FFD700' : '#D97706' },
+                    ]}
+                  >
+                    {coins.toLocaleString()}
+                  </Text>
                   <View style={styles.addMiniBadge}>
                     <Ionicons name="add" size={12} color="#FFF" />
                   </View>
@@ -127,7 +200,11 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
 
                 {/* Close Button */}
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
-                  <Ionicons name="close" size={20} color="#F1E0E4" />
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={isDark ? '#F1E0E4' : '#191C1D'}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -139,12 +216,31 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
                 return (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.categoryTab, isActive && styles.categoryTabActive]}
+                    style={[
+                      styles.categoryTab,
+                      {
+                        backgroundColor: isActive
+                          ? '#F65592'
+                          : isDark
+                          ? 'rgba(255, 255, 255, 0.06)'
+                          : 'rgba(0, 0, 0, 0.05)',
+                      },
+                    ]}
                     onPress={() => scrollToGroup(cat)}
                     activeOpacity={0.8}
                   >
                     <Text
-                      style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}
+                      style={[
+                        styles.categoryTabText,
+                        {
+                          color: isActive
+                            ? '#FFFFFF'
+                            : isDark
+                            ? 'rgba(241, 224, 228, 0.7)'
+                            : '#5A606B',
+                          fontWeight: isActive ? '700' : '600',
+                        },
+                      ]}
                     >
                       {cat}
                     </Text>
@@ -153,73 +249,148 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
               })}
             </View>
 
-            {/* Single Scrollable List with All Gift Groups */}
-            <ScrollView
-              ref={scrollRef}
-              style={styles.giftScroll}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {GIFT_GROUPS.map((group) => {
-                const groupGifts = VIRTUAL_GIFTS.filter((g) => g.category === group.category);
-                return (
-                  <View
-                    key={group.category}
-                    style={styles.groupSection}
-                    onLayout={(e) => {
-                      groupPositions[group.category] = e.nativeEvent.layout.y;
-                    }}
-                  >
-                    {/* Group Header */}
-                    <View style={styles.groupHeaderRow}>
-                      <Text style={styles.groupHeaderTitle}>{group.label}</Text>
-                      <View style={styles.groupBadge}>
-                        <Text style={styles.groupBadgeText}>{group.badge}</Text>
+            {/* Scrollable Container with Fixed Bounded Height */}
+            <View style={styles.giftScrollWrapper}>
+              <ScrollView
+                ref={scrollRef}
+                style={styles.giftScroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+              >
+                {GIFT_GROUPS.map((group) => {
+                  const groupGifts = VIRTUAL_GIFTS.filter((g) => g.category === group.category);
+                  return (
+                    <View
+                      key={group.category}
+                      style={styles.groupSection}
+                      onLayout={(e) => {
+                        groupPositions[group.category] = e.nativeEvent.layout.y;
+                      }}
+                    >
+                      {/* Group Header */}
+                      <View style={styles.groupHeaderRow}>
+                        <Text
+                          style={[
+                            styles.groupHeaderTitle,
+                            { color: isDark ? '#F1E0E4' : '#191C1D' },
+                          ]}
+                        >
+                          {group.label}
+                        </Text>
+                        <View style={styles.groupBadge}>
+                          <Ionicons name={group.badgeIcon} size={11} color="#F65592" style={{ marginRight: 4 }} />
+                          <Text style={styles.groupBadgeText}>{group.badge}</Text>
+                        </View>
+                      </View>
+
+                      {/* Group Gifts Grid */}
+                      <View style={styles.gridContainer}>
+                        {groupGifts.map((gift) => {
+                          const isSelected = selectedGift.id === gift.id;
+                          return (
+                            <TouchableOpacity
+                              key={gift.id}
+                              style={[
+                                styles.giftCard,
+                                {
+                                  backgroundColor: isSelected
+                                    ? isDark
+                                      ? 'rgba(246, 85, 146, 0.22)'
+                                      : 'rgba(246, 85, 146, 0.14)'
+                                    : isDark
+                                    ? 'rgba(39, 29, 32, 0.70)'
+                                    : 'rgba(0, 0, 0, 0.04)',
+                                  borderColor: isSelected ? '#F65592' : 'transparent',
+                                },
+                              ]}
+                              onPress={() => handleSelectGift(gift)}
+                              activeOpacity={0.85}
+                            >
+                              {/* Emoji Container */}
+                              <View
+                                style={[
+                                  styles.iconWrap,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? `${gift.accentColor}35`
+                                      : isDark
+                                      ? 'rgba(255, 255, 255, 0.08)'
+                                      : 'rgba(0, 0, 0, 0.05)',
+                                    borderColor: isSelected ? gift.accentColor : 'transparent',
+                                    borderWidth: isSelected ? 1.5 : 0,
+                                  },
+                                ]}
+                              >
+                                <Text style={{ fontSize: 28 }}>{gift.emoji}</Text>
+                              </View>
+
+                              {/* Gift Name */}
+                              <Text
+                                style={[
+                                  styles.giftName,
+                                  { color: isDark ? '#F1E0E4' : '#191C1D' },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {gift.name}
+                              </Text>
+
+                              {/* Price Pill */}
+                              <View
+                                style={[
+                                  styles.pricePill,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? isDark
+                                        ? 'rgba(246, 85, 146, 0.35)'
+                                        : 'rgba(246, 85, 146, 0.20)'
+                                      : isDark
+                                      ? 'rgba(255, 255, 255, 0.08)'
+                                      : 'rgba(0, 0, 0, 0.05)',
+                                  },
+                                ]}
+                              >
+                                <CoinIcon size={11} color={isDark ? '#FFD700' : '#D97706'} />
+                                <Text style={[styles.priceAmount, { color: isDark ? '#FFD700' : '#D97706' }]}>
+                                  {gift.coins.toLocaleString()}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </View>
-
-                    {/* Group Gifts Grid */}
-                    <View style={styles.gridContainer}>
-                      {groupGifts.map((gift) => {
-                        const isSelected = selectedGift.id === gift.id;
-                        return (
-                          <TouchableOpacity
-                            key={gift.id}
-                            style={[styles.giftCard, isSelected && styles.giftCardSelected]}
-                            onPress={() => handleSelectGift(gift)}
-                            activeOpacity={0.85}
-                          >
-                            {/* Icon Container */}
-                            <View style={styles.iconWrap}>
-                              <Text style={styles.giftIcon}>{gift.icon}</Text>
-                            </View>
-
-                            {/* Gift Name */}
-                            <Text style={styles.giftName} numberOfLines={1}>
-                              {gift.name}
-                            </Text>
-
-                            {/* Price Pill */}
-                            <View style={[styles.pricePill, isSelected && styles.pricePillSelected]}>
-                              <Text style={styles.priceCoinIcon}>🪙</Text>
-                              <Text style={styles.priceAmount}>{gift.coins.toLocaleString()}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
             {/* Action Footer: Send Button for Selected Gift */}
             <View style={styles.footerRow}>
               <View style={styles.selectedGiftInfo}>
-                <Text style={styles.selectedGiftLabel}>Selected Gift:</Text>
-                <Text style={styles.selectedGiftName} numberOfLines={1}>
-                  {selectedGift.icon} {selectedGift.name}
+                <Text
+                  style={[
+                    styles.selectedGiftLabel,
+                    { color: isDark ? 'rgba(241, 224, 228, 0.6)' : '#6B7280' },
+                  ]}
+                >
+                  Selected Gift:
                 </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 20 }}>{selectedGift.emoji}</Text>
+                  <Text
+                    style={[
+                      styles.selectedGiftName,
+                      { color: isDark ? '#F1E0E4' : '#191C1D' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedGift.name}
+                  </Text>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -227,14 +398,39 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
                 onPress={() => handleSendGift(selectedGift)}
                 activeOpacity={0.85}
               >
-                <Ionicons name="sparkles" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Ionicons name="gift" size={16} color="#FFF" style={{ marginRight: 6 }} />
                 <Text style={styles.sendBigBtnText}>
-                  Send ({selectedGift.coins.toLocaleString()} 🪙)
+                  Send ({selectedGift.coins.toLocaleString()} Coins)
                 </Text>
               </TouchableOpacity>
             </View>
           </BlurView>
         </View>
+
+        {/* In-Sheet Custom Modal for Insufficient Coins (no modal-on-modal conflict) */}
+        <AppModal
+          visible={insufficientModalVisible}
+          useModalHost={false}
+          onClose={() => setInsufficientModalVisible(false)}
+          title="Insufficient Coins"
+          description={`You have ${coins.toLocaleString()} coins, but ${pendingGift?.name || 'this gift'} costs ${pendingGift?.coins.toLocaleString() || ''} coins.\n\nRecharge your wallet to send this gift!`}
+          icon="wallet-outline"
+          iconColor="#FFD700"
+          primaryAction={{
+            label: 'Recharge Now',
+            onPress: () => {
+              setInsufficientModalVisible(false);
+              onClose();
+              setTimeout(() => {
+                onNeedRecharge();
+              }, 220);
+            },
+          }}
+          secondaryAction={{
+            label: 'Cancel',
+            onPress: () => setInsufficientModalVisible(false),
+          }}
+        />
       </View>
     </Modal>
   );
@@ -251,10 +447,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     overflow: 'hidden',
     backgroundColor: 'rgba(26, 17, 20, 0.96)',
+    width: '100%',
   },
   sheet: {
     paddingHorizontal: 18,
     paddingTop: 18,
+    width: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -317,10 +515,10 @@ const styles = StyleSheet.create({
   // Category Tabs
   categoryTabsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(39, 29, 32, 0.7)',
     borderRadius: 16,
     padding: 3,
     marginBottom: 14,
+    gap: 6,
   },
   categoryTab: {
     flex: 1,
@@ -331,10 +529,6 @@ const styles = StyleSheet.create({
   },
   categoryTabActive: {
     backgroundColor: '#FF69B4',
-    shadowColor: '#FF69B4',
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 3,
   },
   categoryTabText: {
     fontSize: 12,
@@ -346,14 +540,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   // Gifts Single Scroll & Groups
+  giftScrollWrapper: {
+    height: Math.min(380, Math.floor(SCREEN_HEIGHT * 0.46)),
+    width: '100%',
+  },
   giftScroll: {
-    maxHeight: 360,
+    flex: 1,
+    width: '100%',
   },
   scrollContent: {
-    paddingBottom: 14,
+    paddingBottom: 16,
+    gap: 20,
   },
   groupSection: {
-    marginBottom: 20,
+    gap: 10,
   },
   groupHeaderRow: {
     flexDirection: 'row',
@@ -365,57 +565,62 @@ const styles = StyleSheet.create({
   groupHeaderTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#F1E0E4',
     letterSpacing: 0.2,
   },
   groupBadge: {
-    backgroundColor: 'rgba(255, 105, 180, 0.15)',
+    backgroundColor: 'rgba(246, 85, 146, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   groupBadgeText: {
-    color: '#FF69B4',
+    color: '#F65592',
     fontSize: 11,
     fontWeight: '700',
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     justifyContent: 'flex-start',
   },
   giftCard: {
-    width: '31%',
-    backgroundColor: 'rgba(39, 29, 32, 0.7)',
+    width: CARD_WIDTH,
     borderRadius: 18,
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     alignItems: 'center',
     gap: 4,
+    borderWidth: 1.5,
+    overflow: 'hidden',
   },
-  giftCardSelected: {
-    backgroundColor: 'rgba(255, 105, 180, 0.22)',
-    shadowColor: '#FF69B4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
-    elevation: 4,
+  sheetTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 16,
+    zIndex: 10,
+  },
+  sheetBottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 20,
+    zIndex: 10,
   },
   iconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
-  giftIcon: {
-    fontSize: 28,
-  },
   giftName: {
-    color: '#F1E0E4',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
@@ -423,7 +628,6 @@ const styles = StyleSheet.create({
   pricePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -470,11 +674,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 22,
-    shadowColor: '#FF69B4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.75,
-    shadowRadius: 14,
-    elevation: 8,
   },
   sendBigBtnText: {
     color: '#FFFFFF',

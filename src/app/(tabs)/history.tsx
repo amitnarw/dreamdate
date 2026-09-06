@@ -1,8 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import AppBackground from '../../components/AppBackground';
 import AppBlurView from '../../components/AppBlurView';
+import AppHeader from '../../components/AppHeader';
+import CoinIcon from '../../components/CoinIcon';
 import {
     Animated,
     Dimensions,
@@ -19,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import RechargeModal from '../../components/RechargeModal';
 import { StitchTheme } from '../../constants/theme';
 import { useTabBlur } from '../../context/TabBlurContext';
+import { useTheme } from '../../context/ThemeContext';
 import { MOCK_PROFILES } from '../../data/mockProfiles';
 import { useWallet } from '../../services/wallet';
 
@@ -125,7 +130,6 @@ const CHAT_MINUTES_AGO = [0, 14, 38, 150, 420, 2880, 7200, 14400, 28800, 50000, 
 export default function MessageCenterHistory() {
   const router = useRouter();
   const { coins } = useWallet();
-  const { tabTargetRef } = useTabBlur();
   const [activeTab, setActiveTab] = useState<TabType>('chats');
   const [rechargeVisible, setRechargeVisible] = useState(false);
   const [tabBarWidth, setTabBarWidth] = useState(SCREEN_WIDTH - 40);
@@ -147,6 +151,13 @@ export default function MessageCenterHistory() {
     setActiveTab(page === 0 ? 'chats' : 'calls');
   };
 
+  const { theme, isDark } = useTheme();
+  const { targets, notifyTargetMounted } = useTabBlur();
+
+  useEffect(() => {
+    notifyTargetMounted();
+  }, []);
+
   const segmentWidth = Math.max(0, (tabBarWidth - 8) / 2);
 
   const pillTranslateX = scrollX.interpolate({
@@ -156,31 +167,33 @@ export default function MessageCenterHistory() {
   });
 
   return (
-    <BlurTargetView ref={tabTargetRef} style={{ flex: 1, backgroundColor: '#1A1114' }}>
-      <SafeAreaView style={styles.container} edges={['top']}>
-      {/* TopAppBar 100% exact to Stitch Message Center with centralized AppBlurView */}
-      <AppBlurView style={styles.header}>
-        <View style={styles.brandRow}>
-          <Ionicons name="heart" size={24} color={StitchTheme.colors.primaryContainer} />
-          <Text style={styles.brandTitle}>DreamDate</Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.coinPill}
-            onPress={() => setRechargeVisible(true)}
-            activeOpacity={0.8}
+    <BlurTargetView
+      ref={targets.history}
+      style={[
+        styles.container,
+        { overflow: 'hidden' },
+      ]}
+    >
+      <AppBackground>
+          <SafeAreaView
+            style={styles.container}
+            edges={['left', 'right']}
           >
-            <Text style={styles.coinEmoji}>🪙</Text>
-            <Text style={styles.coinAmount}>{coins}</Text>
-          </TouchableOpacity>
-        </View>
-      </AppBlurView>
+            {/* Standardized AppHeader (Consistent with Female Details Page) */}
+            <AppHeader title="Chats & Calls" showCoins={true} />
 
-      {/* Tabs Pill Switcher with Animated Sliding Indicator */}
-      <View style={styles.tabBarWrap}>
+            {/* Tabs Pill Switcher with Animated Sliding Indicator */}
+            <View style={styles.tabBarWrap}>
         <AppBlurView
-          style={styles.glassTabContainer}
+          style={[
+            styles.glassTabContainer,
+            {
+              backgroundColor: isDark
+                ? 'rgba(30, 32, 32, 0.45)'
+                : 'rgba(0, 0, 0, 0.05)',
+            },
+          ]}
+          tint={isDark ? 'dark' : 'light'}
           onLayout={(e: LayoutChangeEvent) => {
             const w = e.nativeEvent.layout.width;
             if (w > 0 && Math.abs(w - tabBarWidth) > 2) {
@@ -195,6 +208,7 @@ export default function MessageCenterHistory() {
               {
                 width: segmentWidth,
                 transform: [{ translateX: pillTranslateX }],
+                backgroundColor: isDark ? '#333535' : '#FFFFFF',
               },
             ]}
           />
@@ -207,7 +221,15 @@ export default function MessageCenterHistory() {
             <Text
               style={[
                 styles.tabSegmentText,
-                activeTab === 'chats' && styles.tabSegmentTextActive,
+                {
+                  color:
+                    activeTab === 'chats'
+                      ? isDark
+                        ? '#FFFFFF'
+                        : '#191C1D'
+                      : theme.colors.onSurfaceVariant,
+                  fontWeight: activeTab === 'chats' ? '700' : '500',
+                },
               ]}
             >
               Chats
@@ -222,7 +244,15 @@ export default function MessageCenterHistory() {
             <Text
               style={[
                 styles.tabSegmentText,
-                activeTab === 'calls' && styles.tabSegmentTextActive,
+                {
+                  color:
+                    activeTab === 'calls'
+                      ? isDark
+                        ? '#FFFFFF'
+                        : '#191C1D'
+                      : theme.colors.onSurfaceVariant,
+                  fontWeight: activeTab === 'calls' ? '700' : '500',
+                },
               ]}
             >
               Video Calls
@@ -231,11 +261,12 @@ export default function MessageCenterHistory() {
         </AppBlurView>
       </View>
 
-      {/* Horizontal Swipeable Tabs Pager */}
-      <Animated.ScrollView
-        ref={pagerRef}
-        horizontal
-        pagingEnabled
+      {/* Horizontal Swipeable Tabs Pager with Seamless Background */}
+      <View style={{ flex: 1 }}>
+        <Animated.ScrollView
+          ref={pagerRef}
+          horizontal
+          pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
         bounces={false}
@@ -259,7 +290,18 @@ export default function MessageCenterHistory() {
               const displayTime = formatHistoryTime(minutesAgo);
               return (
                 <TouchableOpacity
-                  style={styles.chatRow}
+                  style={[
+                    styles.chatRow,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(30, 32, 32, 0.45)'
+                        : '#FFFFFF',
+                      borderColor: isDark
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.06)',
+                      borderWidth: 1,
+                    },
+                  ]}
                   onPress={() => router.push(`/chat/${item.id}` as any)}
                   activeOpacity={0.8}
                 >
@@ -279,11 +321,23 @@ export default function MessageCenterHistory() {
                   {/* Name, Time, Preview */}
                   <View style={styles.chatInfo}>
                     <View style={styles.chatHeaderRow}>
-                      <Text style={styles.chatName}>{item.name.split(' ')[0]}</Text>
+                      <Text
+                        style={[
+                          styles.chatName,
+                          { color: isDark ? '#FFFFFF' : '#191C1D' },
+                        ]}
+                      >
+                        {item.name.split(' ')[0]}
+                      </Text>
                       <Text
                         style={[
                           styles.chatTime,
-                          isUnread && { color: StitchTheme.colors.primaryContainer, fontWeight: '600' },
+                          {
+                            color: isUnread
+                              ? '#F65592'
+                              : theme.colors.onSurfaceVariant,
+                            fontWeight: isUnread ? '600' : '400',
+                          },
                         ]}
                       >
                         {displayTime}
@@ -292,19 +346,24 @@ export default function MessageCenterHistory() {
                     <Text
                       style={[
                         styles.chatPreview,
-                        isUnread
-                          ? { color: StitchTheme.colors.onSurface, fontWeight: '500' }
-                          : { color: StitchTheme.colors.onSurfaceVariant },
+                        {
+                          color: isUnread
+                            ? isDark
+                              ? '#FFFFFF'
+                              : '#191C1D'
+                            : theme.colors.onSurfaceVariant,
+                          fontWeight: isUnread ? '500' : '400',
+                        },
                       ]}
                       numberOfLines={1}
                     >
                       {index === 0
-                        ? "I'd love to go there! Free to call now? ❤️"
+                        ? "I'd love to go there! Free to call now?"
                         : `Hii dear! Main ${item.name}. Kaise ho?`}
                     </Text>
                   </View>
 
-                  {/* Stitch Pink Glowing Dot for Unread */}
+                  {/* Pink Glowing Dot for Unread */}
                   {isUnread && <View style={styles.unreadGlowDot} />}
                 </TouchableOpacity>
               );
@@ -322,29 +381,70 @@ export default function MessageCenterHistory() {
               const displayTime = formatHistoryTime(item.minutesAgo);
               return (
                 <TouchableOpacity
-                  style={styles.callRow}
+                  style={[
+                    styles.callRow,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(30, 32, 32, 0.45)'
+                        : '#FFFFFF',
+                      borderColor: isDark
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.06)',
+                      borderWidth: 1,
+                    },
+                  ]}
                   onPress={() => router.push(`/call/${item.profileId}` as any)}
                   activeOpacity={0.8}
                 >
                   <Image source={{ uri: item.avatar }} style={styles.callAvatar} />
 
                   <View style={styles.callInfo}>
-                    <Text style={styles.callName}>{item.name}</Text>
+                    <Text
+                      style={[
+                        styles.callName,
+                        { color: isDark ? '#FFFFFF' : '#191C1D' },
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
                     <View style={styles.callMetaRow}>
                       {item.type === 'incoming' && (
-                        <Ionicons name="arrow-down" size={13} color={StitchTheme.colors.liveGreen} />
+                        <Ionicons name="arrow-down" size={13} color="#4ADE80" />
                       )}
                       {item.type === 'outgoing' && (
-                        <Ionicons name="arrow-up" size={13} color={StitchTheme.colors.primaryContainer} />
+                        <Ionicons name="arrow-up" size={13} color="#F65592" />
                       )}
                       {item.type === 'missed' && (
                         <Ionicons name="close" size={13} color="#FF6B6B" />
                       )}
-                      <Text style={styles.callTime}>{displayTime}</Text>
+                      <Text
+                        style={[
+                          styles.callTime,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                      >
+                        {displayTime}
+                      </Text>
                     </View>
-                    <Text style={styles.callDuration}>
-                      Duration: {item.duration} {item.coins > 0 ? `• 🪙 ${item.coins}` : ''}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <Text
+                        style={[
+                          styles.callDuration,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                      >
+                        Duration: {item.duration}
+                      </Text>
+                      {item.coins > 0 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 11 }}>•</Text>
+                          <CoinIcon size={10} color="#FFD700" />
+                          <Text style={[styles.callDuration, { color: theme.colors.onSurfaceVariant }]}>
+                            {item.coins}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
 
                   <TouchableOpacity
@@ -360,17 +460,18 @@ export default function MessageCenterHistory() {
           />
         </View>
       </Animated.ScrollView>
+    </View>
 
-      <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
+    <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
     </SafeAreaView>
-  </BlurTargetView>
+  </AppBackground>
+</BlurTargetView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: StitchTheme.colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -441,10 +542,6 @@ const styles = StyleSheet.create({
     bottom: 4,
     borderRadius: 24,
     backgroundColor: StitchTheme.colors.surfaceVariant,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 3,
   },
   tabSegment: {
     flex: 1,
@@ -491,9 +588,6 @@ const styles = StyleSheet.create({
   },
   storyRingActive: {
     backgroundColor: StitchTheme.colors.primaryContainer,
-    shadowColor: StitchTheme.colors.primaryContainer,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
   },
   storyRingInactive: {
     backgroundColor: 'rgba(166, 137, 144, 0.2)',
@@ -538,10 +632,6 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 4.5,
     backgroundColor: StitchTheme.colors.primaryContainer,
-    shadowColor: StitchTheme.colors.primaryContainer,
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    elevation: 4,
   },
 
   // Calls tab styles
@@ -588,8 +678,21 @@ const styles = StyleSheet.create({
     backgroundColor: StitchTheme.colors.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: StitchTheme.colors.primaryContainer,
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+  },
+  topScrollFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 18,
+    zIndex: 15,
+  },
+  bottomScrollFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 28,
+    zIndex: 15,
   },
 });

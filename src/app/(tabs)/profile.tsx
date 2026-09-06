@@ -3,776 +3,1345 @@ import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  Animated,
+  Dimensions,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AppBlurView from '../../components/AppBlurView';
+import AppBackground from '../../components/AppBackground';
+import AppHeader from '../../components/AppHeader';
+import AppModal from '../../components/AppModal';
+import CoinIcon from '../../components/CoinIcon';
 import DailyCheckInModal from '../../components/DailyCheckInModal';
 import RechargeModal from '../../components/RechargeModal';
-import { StitchTheme } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
 import { useTabBlur } from '../../context/TabBlurContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useWallet } from '../../services/wallet';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function UserProfileTab() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const { coins } = useWallet();
-  const { tabTargetRef } = useTabBlur();
+  const { theme, isDark, toggleTheme } = useTheme();
+  const { targets, notifyTargetMounted } = useTabBlur();
+
+  // Modals state
   const [rechargeVisible, setRechargeVisible] = useState(false);
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [policyModal, setPolicyModal] = useState<'agreement' | 'privacy' | null>(null);
+
+  // AppModal dialogs state
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [loggedOutNoticeVisible, setLoggedOutNoticeVisible] = useState(false);
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [rateThanksVisible, setRateThanksVisible] = useState(false);
   const [userRating, setUserRating] = useState(5);
 
+  // Entrance animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    notifyTargetMounted();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const handleRateSubmit = () => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {}
     setRateModalVisible(false);
-    Alert.alert(
-      'Thank You! ⭐',
-      `You rated DreamDate ${userRating} stars! Your feedback helps us make companion talks even more magical.`,
-      [{ text: 'Close' }]
-    );
+    setTimeout(() => {
+      setRateThanksVisible(true);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+    }, 250);
   };
 
-  const handleLogout = () => {
+  const handleConfirmLogout = async () => {
+    setLogoutModalVisible(false);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      await logout();
+    } catch (e) {
+      console.error('Logout error', e);
+    }
+  };
+
+  const handleThemeToggle = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (e) {}
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your DreamDate account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: () => {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch (e) {}
-            Alert.alert('Logged Out', 'You have been logged out.');
-          },
-        },
-      ]
-    );
+    toggleTheme();
   };
 
   return (
-    <BlurTargetView ref={tabTargetRef} style={{ flex: 1, backgroundColor: '#1A1114' }}>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Top Header */}
-        <AppBlurView style={styles.header}>
-          <Text style={styles.headerTitle}>My Profile</Text>
-        </AppBlurView>
-
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
+    <BlurTargetView
+      ref={targets.profile}
+      style={[
+        styles.container,
+        { overflow: 'hidden' },
+      ]}
+    >
+      <AppBackground>
+        <SafeAreaView
+          style={styles.container}
+          edges={['left', 'right']}
         >
-          {/* User Card */}
-          <TouchableOpacity
-            style={styles.userCard}
-            onPress={() => router.push('/vip' as any)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.userAvatarWrap}>
-              <Text style={{ fontSize: 32 }}>👑</Text>
-            </View>
-            <View style={styles.userInfo}>
-              <View style={styles.userNameRow}>
-                <Text style={styles.userName}>VIP Explorer</Text>
-                <View style={styles.vipTag}>
-                  <Text style={styles.vipTagText}>VIP ELITE</Text>
+          {/* Standardized AppHeader (Consistent with Female Details Page) */}
+          <AppHeader title="Profile" showCoins={true} />
+
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              contentContainerStyle={styles.content}
+              showsVerticalScrollIndicator={false}
+            >
+            <Animated.View
+              style={{
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+                gap: 20,
+              }}
+            >
+              {/* Hero Identity Presentation (Quiet Luxury Dribbble Style) */}
+              <View
+                style={[
+                  styles.heroCard,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: isDark
+                      ? 'rgba(255, 255, 255, 0.06)'
+                      : 'rgba(0, 0, 0, 0.06)',
+                  },
+                ]}
+              >
+            {/* Top Row: Avatar & Identity */}
+            <View style={styles.heroIdentityRow}>
+              <View style={styles.avatarWrap}>
+                {user?.avatar ? (
+                  <Image source={{ uri: user.avatar }} style={styles.avatarCircle} />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatarCircle,
+                      {
+                        backgroundColor: isDark
+                          ? 'rgba(246, 85, 146, 0.16)'
+                          : 'rgba(246, 85, 146, 0.12)',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.avatarMonogram}>
+                      {user?.name
+                        ? user.name
+                            .split(' ')
+                            .map((w) => w[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()
+                        : 'AM'}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.verifiedDot}>
+                  <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
                 </View>
               </View>
-              <Text style={styles.userId}>ID: DD-782910</Text>
+
+              <View style={styles.heroTextCol}>
+                <View style={styles.heroNameRow}>
+                  <Text
+                    style={[
+                      styles.heroName,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    {user?.name || 'Alex Morgan'}
+                  </Text>
+                  <View style={styles.vipPillBadge}>
+                    <Text style={styles.vipPillBadgeText}>VIP ELITE</Text>
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.heroHandle,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  {user?.email ? `${user.email} · ID DD-782910` : '@alex · ID DD-782910'}
+                </Text>
+              </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#F65592" />
-          </TouchableOpacity>
 
-          {/* Coin Balance Card */}
-          <LinearGradient
-            colors={['#2D1C24', '#3A1E2B', '#26141D']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.balanceCard}
-          >
-            <View style={styles.balanceLeft}>
-              <Text style={styles.balanceTitle}>Available Balance</Text>
-              <View style={styles.coinDisplayRow}>
-                <Text style={styles.coinBigIcon}>🪙</Text>
-                <Text style={styles.coinBigAmount}>{coins.toLocaleString()}</Text>
-                <Text style={styles.coinUnit}>Coins</Text>
+            {/* Subtle Divider */}
+            <View
+              style={[
+                styles.cardInnerDivider,
+                {
+                  backgroundColor: isDark
+                    ? 'rgba(255, 255, 255, 0.05)'
+                    : 'rgba(0, 0, 0, 0.05)',
+                },
+              ]}
+            />
+
+            {/* Editorial Stats Row */}
+            <View style={styles.statsRow}>
+              <View style={styles.statCol}>
+                <Text
+                  style={[
+                    styles.statValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  12
+                </Text>
+                <Text
+                  style={[
+                    styles.statLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Matches
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.statDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.08)',
+                  },
+                ]}
+              />
+
+              <View style={styles.statCol}>
+                <Text
+                  style={[
+                    styles.statValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  48
+                </Text>
+                <Text
+                  style={[
+                    styles.statLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Calls
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.statDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.08)',
+                  },
+                ]}
+              />
+
+              <View style={styles.statCol}>
+                <Text
+                  style={[
+                    styles.statValue,
+                    { color: '#F65592' },
+                  ]}
+                >
+                  98%
+                </Text>
+                <Text
+                  style={[
+                    styles.statLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Rating
+                </Text>
               </View>
             </View>
-
-            <TouchableOpacity
-              style={styles.rechargeBtn}
-              onPress={() => setRechargeVisible(true)}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add-circle" size={18} color="#FFF" />
-              <Text style={styles.rechargeBtnText}>Recharge</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-
-          {/* Quick Dual Highlight Cards: Daily Check-in & VIP Explorer */}
-          <View style={styles.dualCardsRow}>
-            {/* Daily Check-In Card */}
-            <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => {
-                setCheckInVisible(true);
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                } catch (e) {}
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(246, 85, 146, 0.18)' }]}>
-                <Text style={{ fontSize: 24 }}>🎁</Text>
-              </View>
-              <View style={styles.featureCardContent}>
-                <Text style={styles.featureCardTitle}>Daily Check-In</Text>
-                <Text style={styles.featureCardSub}>Up to +500 🪙 free</Text>
-              </View>
-              <View style={styles.featureCardBadge}>
-                <Text style={styles.featureCardBadgeText}>CLAIM</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* VIP Membership Card */}
-            <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => {
-                router.push('/vip' as any);
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                } catch (e) {}
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(255, 215, 0, 0.18)' }]}>
-                <Text style={{ fontSize: 24 }}>👑</Text>
-              </View>
-              <View style={styles.featureCardContent}>
-                <Text style={styles.featureCardTitle}>VIP Explorer</Text>
-                <Text style={styles.featureCardSub}>6 Elite Privileges</Text>
-              </View>
-              <View style={[styles.featureCardBadge, { backgroundColor: 'rgba(255, 215, 0, 0.22)' }]}>
-                <Text style={[styles.featureCardBadgeText, { color: '#FFD700' }]}>EXPLORE</Text>
-              </View>
-            </TouchableOpacity>
           </View>
 
-          {/* Section: Rewards & Privileges */}
+          {/* Luxury Card: Wallet / Balance Tile */}
+          <View
+            style={[
+              styles.walletCard,
+              {
+                backgroundColor: isDark ? '#191B1D' : '#FFFFFF',
+                borderColor: isDark
+                  ? 'rgba(255, 255, 255, 0.06)'
+                  : 'rgba(0, 0, 0, 0.06)',
+              },
+            ]}
+          >
+            <View style={styles.walletHeaderRow}>
+              <View style={styles.walletTagRow}>
+                <CoinIcon size={14} color="#FFD700" />
+                <Text
+                  style={[
+                    styles.walletCardTag,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  DREAMDATE COIN BALANCE
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.walletMainRow}>
+              <View style={styles.balanceCol}>
+                <View style={styles.balanceNumberRow}>
+                  <Text
+                    style={[
+                      styles.balanceAmount,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    {coins.toLocaleString()}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.balanceUnit,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Coins
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.rechargeBtn}
+                onPress={() => setRechargeVisible(true)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="add" size={16} color="#FFFFFF" />
+                <Text style={styles.rechargeBtnText}>Recharge</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Section: Settings & Extras */}
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionHeaderTitle}>Privileges & Rewards</Text>
-            <View style={styles.menuGroup}>
+            <Text
+              style={[
+                styles.sectionHeaderLabel,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              Membership & Perks
+            </Text>
+
+            <View
+              style={[
+                styles.menuGroupCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: isDark
+                    ? 'rgba(255, 255, 255, 0.06)'
+                    : 'rgba(0, 0, 0, 0.06)',
+                },
+              ]}
+            >
+              {/* Appearance / Theme Switcher */}
+              <View style={styles.menuItem}>
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(0, 0, 0, 0.05)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={isDark ? 'moon' : 'sunny'}
+                    size={18}
+                    color={isDark ? '#FFB1C6' : '#F65592'}
+                  />
+                </View>
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Appearance
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    {isDark ? 'Obsidian Dark' : 'Pearl Light'}
+                  </Text>
+                </View>
+                <Switch
+                  value={isDark}
+                  onValueChange={handleThemeToggle}
+                  trackColor={{
+                    false: 'rgba(160, 160, 160, 0.3)',
+                    true: '#F65592',
+                  }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.menuDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                  },
+                ]}
+              />
+
+              {/* VIP Membership */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => router.push('/vip' as any)}
                 activeOpacity={0.75}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(255, 215, 0, 0.15)' }]}>
-                  <Ionicons name="diamond" size={18} color="#FFD700" />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(246, 85, 146, 0.14)'
+                        : 'rgba(246, 85, 146, 0.1)',
+                    },
+                  ]}
+                >
+                  <Ionicons name="diamond" size={18} color="#F65592" />
                 </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.menuItemTitle}>VIP Explorer Privileges</Text>
-                  <Text style={styles.menuItemSub}>Monthly coins, video discounts & outfits</Text>
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    VIP Privileges
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Unlimited HD calls & priority matching
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(241, 224, 228, 0.4)" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.colors.onSurfaceVariant}
+                />
               </TouchableOpacity>
 
-              <View style={styles.menuDivider} />
+              <View
+                style={[
+                  styles.menuDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                  },
+                ]}
+              />
 
+              {/* Daily Streak Rewards */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => setCheckInVisible(true)}
                 activeOpacity={0.75}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(246, 85, 146, 0.15)' }]}>
-                  <Ionicons name="calendar" size={18} color="#F65592" />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 184, 0, 0.14)'
+                        : 'rgba(255, 184, 0, 0.1)',
+                    },
+                  ]}
+                >
+                  <Ionicons name="calendar" size={18} color="#EAB308" />
                 </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.menuItemTitle}>7-Day Daily Streak Rewards</Text>
-                  <Text style={styles.menuItemSub}>Check in every day to earn more coins</Text>
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Daily Check-In
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Claim up to +500 free bonus coins
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(241, 224, 228, 0.4)" />
+                <View style={styles.claimBadge}>
+                  <Text style={styles.claimBadgeText}>CLAIM</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Section: General & Legal */}
+          {/* Section 2: Preferences & Support */}
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionHeaderTitle}>App & Support</Text>
-            <View style={styles.menuGroup}>
+            <Text
+              style={[
+                styles.sectionHeaderLabel,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              Preferences & Support
+            </Text>
+
+            <View
+              style={[
+                styles.menuGroupCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: isDark
+                    ? 'rgba(255, 255, 255, 0.06)'
+                    : 'rgba(0, 0, 0, 0.06)',
+                },
+              ]}
+            >
+              {/* Rate App */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => setRateModalVisible(true)}
                 activeOpacity={0.75}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(255, 184, 0, 0.15)' }]}>
-                  <Ionicons name="star" size={18} color="#FFB800" />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(0, 0, 0, 0.05)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="star"
+                    size={18}
+                    color={isDark ? '#E2E2E2' : '#333333'}
+                  />
                 </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.menuItemTitle}>Rate Us</Text>
-                  <Text style={styles.menuItemSub}>Share your experience on App Store</Text>
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Rate Experience
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Help us shape the future of companion AI
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(241, 224, 228, 0.4)" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.colors.onSurfaceVariant}
+                />
               </TouchableOpacity>
 
-              <View style={styles.menuDivider} />
+              <View
+                style={[
+                  styles.menuDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                  },
+                ]}
+              />
 
+              {/* User Agreement */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => setPolicyModal('agreement')}
                 activeOpacity={0.75}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(74, 222, 128, 0.15)' }]}>
-                  <Ionicons name="document-text" size={18} color="#4ADE80" />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(0, 0, 0, 0.05)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="document-text"
+                    size={18}
+                    color={isDark ? '#E2E2E2' : '#333333'}
+                  />
                 </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.menuItemTitle}>User Agreement</Text>
-                  <Text style={styles.menuItemSub}>Terms of service and platform rules</Text>
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Terms of Service
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Usage guidelines and platform rules
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(241, 224, 228, 0.4)" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.colors.onSurfaceVariant}
+                />
               </TouchableOpacity>
 
-              <View style={styles.menuDivider} />
+              <View
+                style={[
+                  styles.menuDivider,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                  },
+                ]}
+              />
 
+              {/* Privacy Policy */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => setPolicyModal('privacy')}
                 activeOpacity={0.75}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
-                  <Ionicons name="shield-checkmark" size={18} color="#38BDF8" />
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(0, 0, 0, 0.05)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={18}
+                    color={isDark ? '#E2E2E2' : '#333333'}
+                  />
                 </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.menuItemTitle}>Privacy Policy</Text>
-                  <Text style={styles.menuItemSub}>Data protection & safety standards</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(241, 224, 228, 0.4)" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Section: Logout */}
-          <View style={styles.sectionWrap}>
-            <View style={styles.menuGroup}>
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleLogout}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.menuIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                  <Ionicons name="log-out" size={18} color="#EF4444" />
-                </View>
-                <View style={styles.menuItemInfo}>
-                  <Text style={[styles.menuItemTitle, { color: '#EF4444' }]}>Log Out</Text>
-                  <Text style={styles.menuItemSub}>Sign out of this session</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(239, 68, 68, 0.4)" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Disclaimer */}
-          <View style={styles.disclaimerBox}>
-            <Ionicons name="shield-checkmark" size={16} color="#8A899C" />
-            <Text style={styles.disclaimerText}>
-              DreamDate is a private entertainment simulation. All companion calls and messages are virtual simulations for entertainment purposes only.
-            </Text>
-          </View>
-        </ScrollView>
-
-        {/* Recharge Modal */}
-        <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
-
-        {/* Daily Check-In 7-Day Rewards Modal */}
-        <DailyCheckInModal visible={checkInVisible} onClose={() => setCheckInVisible(false)} />
-
-        {/* Rate Us Modal */}
-        <Modal
-          visible={rateModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setRateModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.rateCard}>
-              <Text style={{ fontSize: 36, textAlign: 'center', marginBottom: 8 }}>⭐</Text>
-              <Text style={styles.rateTitle}>Enjoying DreamDate?</Text>
-              <Text style={styles.rateSubtitle}>
-                Tap the stars below to rate your experience with companions!
-              </Text>
-
-              {/* Star rating selector */}
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <TouchableOpacity
-                    key={star}
-                    onPress={() => {
-                      setUserRating(star);
-                      try {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      } catch (e) {}
-                    }}
-                    activeOpacity={0.7}
+                <View style={styles.menuItemTextCol}>
+                  <Text
+                    style={[
+                      styles.menuItemTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
                   >
-                    <Ionicons
-                      name={star <= userRating ? 'star' : 'star-outline'}
-                      size={36}
-                      color="#FFD700"
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.rateActionsRow}>
-                <TouchableOpacity
-                  style={styles.rateCancelBtn}
-                  onPress={() => setRateModalVisible(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.rateCancelText}>Not Now</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.rateSubmitBtn}
-                  onPress={handleRateSubmit}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.rateSubmitText}>Submit</Text>
-                </TouchableOpacity>
-              </View>
+                    Privacy & Security
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Encrypted conversations and private storage
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.colors.onSurfaceVariant}
+                />
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
 
-        {/* User Agreement & Privacy Policy Modal */}
-        <Modal
-          visible={policyModal !== null}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setPolicyModal(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.policyCard}>
-              <View style={styles.policyHeader}>
-                <Text style={styles.policyTitle}>
-                  {policyModal === 'agreement' ? 'User Agreement' : 'Privacy Policy'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setPolicyModal(null)}
-                  style={styles.policyCloseBtn}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="close" size={20} color="#FFF" />
-                </TouchableOpacity>
-              </View>
+          {/* Sign Out (Quiet Luxury Clean Action) */}
+          <TouchableOpacity
+            style={[
+              styles.signOutButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: isDark
+                  ? 'rgba(255, 255, 255, 0.06)'
+                  : 'rgba(0, 0, 0, 0.06)',
+              },
+            ]}
+            onPress={() => setLogoutModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#E11D48" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
 
-              <ScrollView style={styles.policyScroll} showsVerticalScrollIndicator={false}>
-                {policyModal === 'agreement' ? (
-                  <View style={styles.policyTextWrap}>
-                    <Text style={styles.policyHeading}>1. Acceptance of Terms</Text>
-                    <Text style={styles.policyBody}>
-                      By accessing DreamDate, you agree to be bound by these Terms of Service. DreamDate provides virtual companion interactions designed strictly for entertainment and social simulation.
-                    </Text>
+          <Text
+            style={[
+              styles.appVersionText,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            DreamDate · v1.0.0
+          </Text>
+        </Animated.View>
+      </ScrollView>
+    </View>
 
-                    <Text style={styles.policyHeading}>2. Age Requirement</Text>
-                    <Text style={styles.policyBody}>
-                      You must be at least 18 years of age or the age of legal majority in your jurisdiction to use DreamDate.
-                    </Text>
+      {/* Global Reusable AppModals */}
+      <RechargeModal
+        visible={rechargeVisible}
+        onClose={() => setRechargeVisible(false)}
+      />
 
-                    <Text style={styles.policyHeading}>3. Virtual Currencies & Coins</Text>
-                    <Text style={styles.policyBody}>
-                      Coins and virtual gifts purchased or granted within DreamDate have no real-world monetary value and cannot be redeemed for fiat currency.
-                    </Text>
+      <DailyCheckInModal
+        visible={checkInVisible}
+        onClose={() => setCheckInVisible(false)}
+      />
 
-                    <Text style={styles.policyHeading}>4. Code of Conduct</Text>
-                    <Text style={styles.policyBody}>
-                      Users agree to maintain respectful communications. Harassment, illegal content, and offensive behavior will result in permanent account termination.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.policyTextWrap}>
-                    <Text style={styles.policyHeading}>1. Information We Collect</Text>
-                    <Text style={styles.policyBody}>
-                      We collect basic usage diagnostics, coin transaction history, and local preferences to provide personalized virtual companion recommendations.
-                    </Text>
+      {/* Sign Out Confirmation Modal */}
+      <AppModal
+        visible={logoutModalVisible}
+        onClose={() => setLogoutModalVisible(false)}
+        title="Sign Out"
+        description="Are you sure you want to sign out of your DreamDate account?"
+        icon="log-out-outline"
+        iconColor="#E11D48"
+        primaryAction={{
+          label: 'Sign Out',
+          variant: 'destructive',
+          onPress: handleConfirmLogout,
+        }}
+        secondaryAction={{
+          label: 'Cancel',
+          onPress: () => setLogoutModalVisible(false),
+        }}
+      />
 
-                    <Text style={styles.policyHeading}>2. Security & Data Protection</Text>
-                    <Text style={styles.policyBody}>
-                      Your private chats and call histories are stored safely on your device and encrypted during network transmission. We do not sell user data to third parties.
-                    </Text>
+      {/* Signed Out Notice Modal */}
+      <AppModal
+        visible={loggedOutNoticeVisible}
+        onClose={() => setLoggedOutNoticeVisible(false)}
+        title="Signed Out"
+        description="You have been signed out safely. Come back anytime!"
+        icon="checkmark-circle-outline"
+        iconColor="#4ADE80"
+        primaryAction={{
+          label: 'OK',
+          onPress: () => setLoggedOutNoticeVisible(false),
+        }}
+      />
 
-                    <Text style={styles.policyHeading}>3. Data Retention</Text>
-                    <Text style={styles.policyBody}>
-                      You can delete your chat histories and clear cached companion data at any time directly through the app settings or by contacting support.
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
+      {/* Rate Us Modal */}
+      <AppModal
+        visible={rateModalVisible}
+        onClose={() => setRateModalVisible(false)}
+        title="Rate Experience"
+        description="Tap a star to rate your companion connection quality."
+        icon="star-outline"
+        iconColor="#F65592"
+        primaryAction={{
+          label: 'Submit Rating',
+          onPress: handleRateSubmit,
+        }}
+        secondaryAction={{
+          label: 'Cancel',
+          onPress: () => setRateModalVisible(false),
+        }}
+      >
+        <View style={styles.starsRow}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <TouchableOpacity
+              key={star}
+              onPress={() => {
+                setUserRating(star);
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch (e) {}
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={star <= userRating ? 'star' : 'star-outline'}
+                size={34}
+                color="#F65592"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </AppModal>
+
+      {/* Rating Thank You Modal */}
+      <AppModal
+        visible={rateThanksVisible}
+        onClose={() => setRateThanksVisible(false)}
+        title="Thank You"
+        description={`You rated DreamDate ${userRating} stars! Your feedback helps us make every connection magical.`}
+        icon="star"
+        iconColor="#F65592"
+        primaryAction={{
+          label: 'Close',
+          onPress: () => setRateThanksVisible(false),
+        }}
+      />
+
+      {/* User Agreement & Privacy Policy Sheet */}
+      <Modal
+        visible={policyModal !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPolicyModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.policyCard,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <View style={styles.policyHeader}>
+              <Text
+                style={[
+                  styles.policyTitle,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                {policyModal === 'agreement' ? 'User Agreement' : 'Privacy Policy'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPolicyModal(null)}
+                style={[
+                  styles.policyCloseBtn,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : 'rgba(0, 0, 0, 0.08)',
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="close"
+                  size={18}
+                  color={theme.colors.onSurface}
+                />
+              </TouchableOpacity>
             </View>
+
+            <ScrollView
+              style={styles.policyScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {policyModal === 'agreement' ? (
+                <View style={styles.policyTextWrap}>
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    1. Acceptance of Terms
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    By accessing DreamDate, you agree to be bound by these Terms of Service. DreamDate provides virtual companion interactions designed strictly for entertainment and social simulation.
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    2. Age Requirement
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    You must be at least 18 years of age or the age of legal majority in your jurisdiction to use DreamDate.
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    3. Virtual Currencies & Coins
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Coins and virtual gifts purchased or granted within DreamDate have no real-world monetary value and cannot be redeemed for fiat currency.
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    4. Code of Conduct
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Users agree to maintain respectful communications. Harassment, illegal content, and offensive behavior will result in permanent account termination.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.policyTextWrap}>
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    1. Information We Collect
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    We collect basic usage diagnostics, coin transaction history, and local preferences to provide personalized virtual companion recommendations.
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    2. Security & Data Protection
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Your private chats and call histories are stored safely on your device and encrypted during network transmission. We do not sell user data to third parties.
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.policyHeading,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    3. Data Retention
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBody,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    You can delete your chat histories and clear cached companion data at any time directly through the app settings or by contacting support.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
-        </Modal>
-      </SafeAreaView>
-    </BlurTargetView>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  </AppBackground>
+</BlurTargetView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1114',
   },
   header: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: 'rgba(26, 17, 20, 0.85)',
+    borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
-    color: '#FFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.6,
   },
   content: {
-    padding: 16,
-    gap: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 110,
   },
-  userCard: {
+
+  // Hero Card
+  heroCard: {
+    borderRadius: 26,
+    padding: 22,
+    borderWidth: 1,
+  },
+  heroIdentityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 20, 24, 0.75)',
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
+    gap: 16,
   },
-  userAvatarWrap: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: 'rgba(246, 85, 146, 0.16)',
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatarCircle: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(246, 85, 146, 0.4)',
   },
-  userInfo: {
+  avatarMonogram: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#F65592',
+    letterSpacing: 0.5,
+  },
+  verifiedDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#000',
+    borderRadius: 10,
+  },
+  heroTextCol: {
     flex: 1,
     gap: 4,
   },
-  userNameRow: {
+  heroNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  userName: {
+  heroName: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  vipPillBadge: {
+    backgroundColor: 'rgba(246, 85, 146, 0.16)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  vipPillBadgeText: {
+    color: '#F65592',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  heroHandle: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  cardInnerDivider: {
+    height: 1,
+    marginVertical: 18,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  statCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFF',
+    letterSpacing: -0.2,
   },
-  vipTag: {
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  vipTagText: {
-    color: '#000',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  userId: {
-    color: 'rgba(241, 224, 228, 0.65)',
+  statLabel: {
     fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  balanceCard: {
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+  statDivider: {
+    width: 1,
+    height: 24,
   },
-  balanceLeft: {
-    gap: 4,
+
+  // Wallet Card
+  walletCard: {
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
   },
-  balanceTitle: {
-    color: 'rgba(241, 224, 228, 0.75)',
-    fontSize: 12,
-    fontWeight: '600',
+  walletHeaderRow: {
+    marginBottom: 12,
   },
-  coinDisplayRow: {
+  walletTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  coinBigIcon: {
-    fontSize: 22,
+  walletCardTag: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
-  coinBigAmount: {
-    color: '#FFD700',
-    fontSize: 24,
+  walletMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  balanceCol: {
+    flex: 1,
+  },
+  balanceNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  balanceAmount: {
+    fontSize: 28,
     fontWeight: '800',
+    letterSpacing: -0.8,
   },
-  coinUnit: {
-    color: '#FFD700',
+  balanceUnit: {
     fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 2,
+    fontWeight: '500',
   },
   rechargeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     backgroundColor: '#F65592',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    gap: 6,
-    shadowColor: '#F65592',
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: 11,
+    borderRadius: 22,
   },
   rechargeBtnText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },
-  dualCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  featureCard: {
-    flex: 1,
-    backgroundColor: 'rgba(30, 20, 24, 0.75)',
-    borderRadius: 18,
-    padding: 14,
-    gap: 8,
-    position: 'relative',
-  },
-  featureIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureCardContent: {
-    gap: 2,
-  },
-  featureCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  featureCardSub: {
-    color: 'rgba(241, 224, 228, 0.65)',
-    fontSize: 11,
-  },
-  featureCardBadge: {
-    backgroundColor: 'rgba(246, 85, 146, 0.22)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  featureCardBadgeText: {
-    color: '#F65592',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+
+  // Sections
   sectionWrap: {
     gap: 8,
   },
-  sectionHeaderTitle: {
-    color: 'rgba(241, 224, 228, 0.65)',
+  sectionHeaderLabel: {
     fontSize: 12,
     fontWeight: '700',
-    textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginLeft: 4,
+    marginLeft: 6,
+    textTransform: 'uppercase',
   },
-  menuGroup: {
-    backgroundColor: 'rgba(30, 20, 24, 0.75)',
-    borderRadius: 18,
+  menuGroupCard: {
+    borderRadius: 24,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    gap: 14,
   },
-  menuIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuItemInfo: {
+  menuItemTextCol: {
     flex: 1,
-    gap: 2,
   },
   menuItemTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
-  menuItemSub: {
-    color: 'rgba(241, 224, 228, 0.55)',
-    fontSize: 11,
+  menuItemSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  claimBadge: {
+    backgroundColor: 'rgba(234, 179, 8, 0.16)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  claimBadgeText: {
+    color: '#EAB308',
+    fontSize: 10,
+    fontWeight: '700',
   },
   menuDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginLeft: 64,
+    marginLeft: 70,
   },
-  disclaimerBox: {
+
+  // Sign Out
+  signOutButton: {
+    borderRadius: 20,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 14,
-    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    paddingVertical: 16,
+    borderWidth: 1,
     marginTop: 6,
   },
-  disclaimerText: {
-    color: 'rgba(241, 224, 228, 0.55)',
-    fontSize: 11,
-    lineHeight: 16,
-    flex: 1,
+  signOutText: {
+    color: '#E11D48',
+    fontSize: 15,
+    fontWeight: '700',
   },
-  // Modals
+  appVersionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  // Stars in Rate Modal
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+
+  // Policy Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  rateCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: 'rgba(28, 18, 22, 0.98)',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-  },
-  rateTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  rateSubtitle: {
-    color: 'rgba(241, 224, 228, 0.7)',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 17,
-    marginBottom: 16,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  rateActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  rateCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-  },
-  rateCancelText: {
-    color: 'rgba(241, 224, 228, 0.7)',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  rateSubmitBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#F65592',
-    alignItems: 'center',
-  },
-  rateSubmitText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
   policyCard: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 420,
     maxHeight: '80%',
-    backgroundColor: 'rgba(26, 17, 20, 0.98)',
     borderRadius: 24,
-    overflow: 'hidden',
+    padding: 20,
   },
   policyHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(38, 26, 30, 0.9)',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.15)',
   },
   policyTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
   },
   policyCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   policyScroll: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    marginTop: 14,
   },
   policyTextWrap: {
-    gap: 12,
-    paddingBottom: 24,
+    gap: 14,
+    paddingBottom: 10,
   },
   policyHeading: {
-    color: '#F65592',
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '700',
   },
   policyBody: {
-    color: 'rgba(241, 224, 228, 0.75)',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  topScrollFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 18,
+    zIndex: 15,
+  },
+  bottomScrollFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 28,
+    zIndex: 15,
   },
 });

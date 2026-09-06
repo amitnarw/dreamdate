@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleProp, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 import AppBlurView from './AppBlurView';
+import { useTheme } from '../context/ThemeContext';
 
 interface BackButtonProps {
   onPress?: () => void;
@@ -15,14 +16,16 @@ interface BackButtonProps {
 /**
  * Standard Stitch-Style Back Button used across the entire app
  * Circular frosted button with chevron-back icon powered by centralized AppBlurView
+ * Fully adaptive to light and dark modes.
  */
 export default function BackButton({
   onPress,
   style,
-  iconColor = '#F1E0E4',
+  iconColor,
   size = 20,
 }: BackButtonProps) {
   const router = useRouter();
+  const { isDark } = useTheme();
 
   const handlePress = () => {
     try {
@@ -38,15 +41,34 @@ export default function BackButton({
     }
   };
 
+  const effectiveIconColor = iconColor || (isDark ? '#FFFFFF' : '#191C1D');
+
   return (
     <TouchableOpacity
       onPress={handlePress}
-      style={[styles.wrap, style]}
+      style={[
+        styles.wrap,
+        {
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+          borderWidth: 1,
+        },
+        style,
+      ]}
       activeOpacity={0.8}
       accessibilityLabel="Back"
     >
-      <AppBlurView style={styles.circleBtn}>
-        <Ionicons name="chevron-back" size={size} color={iconColor} />
+      <AppBlurView
+        style={[
+          styles.circleBtn,
+          {
+            backgroundColor: isDark
+              ? 'rgba(28, 18, 22, 0.50)'
+              : 'rgba(255, 255, 255, 0.85)',
+          },
+        ]}
+        tint={isDark ? 'dark' : 'light'}
+      >
+        <Ionicons name="chevron-back" size={size} color={effectiveIconColor} />
       </AppBlurView>
     </TouchableOpacity>
   );

@@ -1,14 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import AppModal from './AppModal';
+import CoinIcon from './CoinIcon';
+import { useTheme } from '../context/ThemeContext';
 import { addCoins } from '../services/wallet';
 
 interface Props {
@@ -17,39 +20,92 @@ interface Props {
 }
 
 const PACKS = [
-  { id: '1', coins: 150, price: '₹99', bonus: '' },
-  { id: '2', coins: 400, price: '₹249', bonus: '+50 Bonus' },
-  { id: '3', coins: 1000, price: '₹499', bonus: '🔥 POPULAR (+200)' },
-  { id: '4', coins: 2500, price: '₹999', bonus: '👑 VIP (+600)' },
+  { id: '1', coins: 150, price: '₹99', bonus: '', badgeIcon: null },
+  { id: '2', coins: 400, price: '₹249', bonus: '+50 Bonus', badgeIcon: null },
+  { id: '3', coins: 1000, price: '₹499', bonus: 'POPULAR (+200)', badgeIcon: 'flame' as const },
+  { id: '4', coins: 2500, price: '₹999', bonus: 'VIP (+600)', badgeIcon: 'ribbon' as const },
 ];
 
 export default function RechargeModal({ visible, onClose }: Props) {
+  const { theme, isDark } = useTheme();
   const [selectedPack, setSelectedPack] = useState(PACKS[2].id);
   const [loading, setLoading] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [failedModalVisible, setFailedModalVisible] = useState(false);
+  const [purchasedCoins, setPurchasedCoins] = useState(0);
 
   const handlePurchase = async () => {
     const pack = PACKS.find((p) => p.id === selectedPack) || PACKS[0];
     setLoading(true);
     setTimeout(async () => {
       setLoading(false);
-      await addCoins(pack.coins);
-      Alert.alert('Recharge Successful! 🎉', `${pack.coins} Coins added to your wallet.`);
-      onClose();
+      try {
+        await addCoins(pack.coins);
+        setPurchasedCoins(pack.coins);
+        setSuccessModalVisible(true);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (e) {}
+      } catch (e) {
+        setFailedModalVisible(true);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } catch (err) {}
+      }
     }, 600);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.cardWrap}>
-          <BlurView intensity={85} tint="dark" style={styles.card}>
+        <View
+          style={[
+            styles.cardWrap,
+            {
+              backgroundColor: isDark
+                ? 'rgba(18, 20, 20, 0.94)'
+                : 'rgba(255, 255, 255, 0.96)',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(0, 0, 0, 0.08)',
+            },
+          ]}
+        >
+          <BlurView
+            intensity={85}
+            tint={isDark ? 'dark' : 'light'}
+            style={[
+              styles.card,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(18, 20, 20, 0.88)'
+                  : 'rgba(255, 255, 255, 0.90)',
+              },
+            ]}
+          >
             <View style={styles.header}>
-              <Text style={styles.title}>Recharge Coins 🪙</Text>
+              <Text
+                style={[
+                  styles.title,
+                  { color: isDark ? '#E2E2E2' : '#191C1D' },
+                ]}
+              >
+                Recharge Coins
+              </Text>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#FFF" />
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color={isDark ? '#FFF' : '#191C1D'}
+                />
               </TouchableOpacity>
             </View>
-            <Text style={styles.sub}>
+            <Text
+              style={[
+                styles.sub,
+                { color: isDark ? '#DFBEC6' : '#6B7280' },
+              ]}
+            >
               Coins are used for 1-on-1 private video calls and sending sweet gifts to your favourite companions.
             </Text>
 
@@ -59,16 +115,69 @@ export default function RechargeModal({ visible, onClose }: Props) {
                 return (
                   <TouchableOpacity
                     key={pack.id}
-                    style={[styles.packItem, isSelected && styles.packItemSelected]}
+                    style={[
+                      styles.packItem,
+                      {
+                        backgroundColor: isSelected
+                          ? isDark
+                            ? 'rgba(246, 85, 146, 0.25)'
+                            : 'rgba(246, 85, 146, 0.14)'
+                          : isDark
+                          ? '#1E2020'
+                          : '#F3F4F6',
+                        borderColor: isSelected ? '#F65592' : 'transparent',
+                      },
+                    ]}
                     onPress={() => setSelectedPack(pack.id)}
                     activeOpacity={0.8}
                   >
                     <View style={styles.packLeft}>
-                      <Text style={styles.packCoins}>🪙 {pack.coins} Coins</Text>
-                      {pack.bonus ? <Text style={styles.packBonus}>{pack.bonus}</Text> : null}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <CoinIcon size={16} color={isDark ? '#FFD700' : '#D97706'} />
+                        <Text
+                          style={[
+                            styles.packCoins,
+                            { color: isDark ? '#E2E2E2' : '#191C1D' },
+                          ]}
+                        >
+                          {pack.coins} Coins
+                        </Text>
+                      </View>
+                      {pack.bonus ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          {pack.badgeIcon ? (
+                            <Ionicons name={pack.badgeIcon} size={12} color="#10B981" />
+                          ) : null}
+                          <Text style={styles.packBonus}>{pack.bonus}</Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={[styles.priceBadge, isSelected && styles.priceBadgeSelected]}>
-                      <Text style={[styles.priceText, isSelected && styles.priceTextSelected]}>{pack.price}</Text>
+                    <View
+                      style={[
+                        styles.priceBadge,
+                        {
+                          backgroundColor: isSelected
+                            ? '#F65592'
+                            : isDark
+                            ? 'rgba(51, 53, 53, 0.6)'
+                            : 'rgba(0, 0, 0, 0.06)',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.priceText,
+                          {
+                            color: isSelected
+                              ? '#FFF'
+                              : isDark
+                              ? '#E2E2E2'
+                              : '#191C1D',
+                          },
+                        ]}
+                      >
+                        {pack.price}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -85,6 +194,52 @@ export default function RechargeModal({ visible, onClose }: Props) {
             </TouchableOpacity>
           </BlurView>
         </View>
+
+        {/* Recharge Success Modal */}
+        <AppModal
+          visible={successModalVisible}
+          useModalHost={false}
+          onClose={() => {
+            setSuccessModalVisible(false);
+            onClose();
+          }}
+          title="Recharge Successful!"
+          description={`${purchasedCoins.toLocaleString()} Coins have been credited to your wallet balance. You're ready to start video calling and gifting!`}
+          icon="checkmark-circle"
+          iconColor="#10B981"
+          primaryAction={{
+            label: 'Great, Continue',
+            onPress: () => {
+              setSuccessModalVisible(false);
+              onClose();
+            },
+          }}
+        />
+
+        {/* Recharge Failed Modal */}
+        <AppModal
+          visible={failedModalVisible}
+          useModalHost={false}
+          onClose={() => setFailedModalVisible(false)}
+          title="Recharge Failed"
+          description="We were unable to process your payment. Please check your payment method and try again."
+          icon="alert-circle"
+          iconColor="#EF4444"
+          primaryAction={{
+            label: 'Try Again',
+            onPress: () => {
+              setFailedModalVisible(false);
+            },
+          }}
+          secondaryAction={{
+            label: 'Cancel',
+            variant: 'secondary',
+            onPress: () => {
+              setFailedModalVisible(false);
+              onClose();
+            },
+          }}
+        />
       </View>
     </Modal>
   );
@@ -179,10 +334,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
-    shadowColor: '#F65592',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 4,
   },
   payText: {
     color: '#FFF',

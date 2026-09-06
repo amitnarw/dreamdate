@@ -24,26 +24,15 @@ import AppBlurView from '../../components/AppBlurView';
 import BackButton from '../../components/BackButton';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
-import { MOCK_PROFILES, Profile } from '../../data/mockProfiles';
+import { useTheme } from '../../context/ThemeContext';
+import { MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-/**
- * Female Profile Details Screen
- *
- * Updates:
- * - Bottom-to-top opening slide animation (320ms)
- * - Smooth FADE OUT animation on exit (220ms)
- * - Online / Busy status badge on top-right of the card
- * - Removed categories / badges above the name
- * - Horizontal gallery list of images above the bottom 3 options
- * - Tap thumbnail to update displayed preview photo
- * - Prominent celebration floating animation when gift is sent
- * - Modernized GiftModal with 24 gifts across 4 categories
- */
 export default function UserProfileDetail1to1() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile: Profile = MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
 
@@ -82,11 +71,25 @@ export default function UserProfileDetail1to1() {
   // Photo blur target ref for Android BlurView support
   const imageTargetRef = useRef<View | null>(null);
 
-  // Gift celebration animation state
-  const [sentGiftAnim, setSentGiftAnim] = useState<{ icon: string; name: string } | null>(null);
-  const giftScaleAnim = useRef(new Animated.Value(0.2)).current;
-  const giftTranslateY = useRef(new Animated.Value(40)).current;
-  const giftOpacityAnim = useRef(new Animated.Value(0)).current;
+  // Gift celebration unboxing animation state (matching video call)
+  const [activeCelebration, setActiveCelebration] = useState<{
+    id: string;
+    name: string;
+    emoji: string;
+    coins: number;
+    accentColor: string;
+  } | null>(null);
+  const giftTravelAnim = useRef(new Animated.Value(0)).current;
+  const boxOpenAnim = useRef(new Animated.Value(0)).current;
+  const giftRevealAnim = useRef(new Animated.Value(0)).current;
+  const giftExitAnim = useRef(new Animated.Value(1)).current;
+  const celebrationTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    };
+  }, []);
 
   // Open animation: Bottom to Top (320ms)
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -153,44 +156,76 @@ export default function UserProfileDetail1to1() {
   }, [isClosing]);
 
   // Handle gift sent animation
-  const handleGiftSent = (gift: { name: string; icon: string; coins: number }) => {
-    setSentGiftAnim(gift);
-    giftScaleAnim.setValue(0.3);
-    giftTranslateY.setValue(40);
-    giftOpacityAnim.setValue(0);
+  const handleGiftSent = (gift: { name: string; icon: string; emoji?: string; coins: number; accentColor?: string }) => {
+    // Determine visual details
+    const matched = VIRTUAL_GIFTS.find(g => g.name.toLowerCase() === gift.name.toLowerCase()) || VIRTUAL_GIFTS[0];
+    const giftName = gift.name || matched.name;
+    const giftEmoji = gift.emoji || matched.emoji || '🎁';
+    const giftCoins = gift.coins || matched.coins;
+    const giftColor = gift.accentColor || matched.accentColor || '#F65592';
 
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) { }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch (e) {}
 
-    Animated.parallel([
-      Animated.spring(giftScaleAnim, {
-        toValue: 1.25,
-        friction: 4,
-        tension: 45,
-        useNativeDriver: true,
-      }),
-      Animated.timing(giftTranslateY, {
-        toValue: -90,
-        duration: 1400,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.timing(giftOpacityAnim, {
+    setActiveCelebration({
+      id: Math.random().toString(),
+      name: giftName,
+      emoji: giftEmoji,
+      coins: giftCoins,
+      accentColor: giftColor,
+    });
+
+    // Reset unboxing animations
+    giftTravelAnim.setValue(0);
+    boxOpenAnim.setValue(0);
+    giftRevealAnim.setValue(0);
+    giftExitAnim.setValue(1);
+
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+
+    // Stage 1: Gift box flies smoothly up from bottom to center (small -> 50% size)
+    Animated.timing(giftTravelAnim, {
+      toValue: 1,
+      duration: 460,
+      useNativeDriver: true,
+    }).start(() => {
+      // Stage 2: Box pops open & inner gift reveals to 100% size with energetic spring
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+
+      Animated.parallel([
+        Animated.timing(boxOpenAnim, {
           toValue: 1,
-          duration: 250,
+          duration: 260,
           useNativeDriver: true,
         }),
-        Animated.delay(1200),
-        Animated.timing(giftOpacityAnim, {
-          toValue: 0,
-          duration: 400,
+        Animated.spring(giftRevealAnim, {
+          toValue: 1,
+          friction: 4.5,
+          tension: 48,
           useNativeDriver: true,
         }),
-      ]),
-    ]).start(() => {
-      setSentGiftAnim(null);
+      ]).start();
+
+      // Stage 3: Hold in center for 2.8s, then graceful fade out
+      celebrationTimerRef.current = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(giftRevealAnim, {
+            toValue: 1.15,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(giftExitAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setActiveCelebration(null);
+        });
+      }, 2800);
     });
   };
 
@@ -209,6 +244,7 @@ export default function UserProfileDetail1to1() {
         style={[
           styles.container,
           {
+            backgroundColor: theme.colors.background,
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
           },
@@ -218,7 +254,14 @@ export default function UserProfileDetail1to1() {
         <View style={[styles.topHeaderBar, { paddingTop: insets.top + 8 }]}>
           <BackButton onPress={handleClose} />
 
-          <Text style={styles.topNavTitle}>Near You</Text>
+          <Text
+            style={[
+              styles.topNavTitle,
+              { color: isDark ? '#FFFFFF' : '#191C1D' },
+            ]}
+          >
+            Near You
+          </Text>
 
           {/* Spacer to keep title centered */}
           <View style={{ width: 40 }} />
@@ -250,21 +293,15 @@ export default function UserProfileDetail1to1() {
             </BlurTargetView>
 
             {/* Status Badge on Top Right of Card (Online / Busy) */}
-            <View style={styles.cardStatusBadgeWrap}>
-              <AppBlurView
-                blurTarget={imageTargetRef}
-                style={styles.cardStatusBadge}
-              >
-                <View
-                  style={[
-                    styles.cardStatusDot,
-                    { backgroundColor: profile.isOnline ? '#4ADE80' : '#FFB1C7' },
-                  ]}
-                />
-                <Text style={styles.cardStatusText}>
-                  {profile.isOnline ? 'Online' : 'Busy'}
-                </Text>
-              </AppBlurView>
+            <View
+              style={[
+                styles.cardStatusBadge,
+                { backgroundColor: profile.isOnline ? '#10B981' : '#E11D48' },
+              ]}
+            >
+              <Text style={styles.cardStatusText}>
+                {profile.isOnline ? 'Online' : 'Busy'}
+              </Text>
             </View>
 
             {/* BEGIN: Exact Stitch Glassmorphic Information Overlay */}
@@ -426,27 +463,112 @@ export default function UserProfileDetail1to1() {
         </View>
         {/* END: Primary Action Row */}
 
-        {/* Gift Celebration Pop Animation Overlay */}
-        {sentGiftAnim && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.celebrationOverlay,
-              {
-                opacity: giftOpacityAnim,
-                transform: [{ scale: giftScaleAnim }, { translateY: giftTranslateY }],
-              },
-            ]}
-          >
-            <View style={styles.celebrationGlowBack}>
-              <Text style={styles.celebrationBigEmoji}>{sentGiftAnim.icon}</Text>
-            </View>
-            <View style={styles.celebrationBanner}>
-              <Text style={styles.celebrationBannerText}>
-                ✨ Sent {sentGiftAnim.name} to {profile.name}! 💖
-              </Text>
-            </View>
-          </Animated.View>
+        {/* Gift Celebration Overlay: Travel from Bottom, Box Opens & Reveals Gift */}
+        {activeCelebration && (
+          <View style={styles.celebrationOverlay} pointerEvents="none">
+            {/* Animated Container Traveling from Bottom to Center */}
+            <Animated.View
+              style={[
+                styles.justTheGiftWrap,
+                {
+                  transform: [
+                    {
+                      translateY: giftTravelAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [420, 0],
+                      }),
+                    },
+                  ],
+                  opacity: giftExitAnim,
+                },
+              ]}
+            >
+              {/* STAGE 1: The Gift Box (travels up small -> 50% at center with gentle tilt) */}
+              <Animated.View
+                style={[
+                  styles.giftBoxLayer,
+                  {
+                    transform: [
+                      {
+                        scale: giftTravelAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.22, 0.5],
+                        }),
+                      },
+                      {
+                        rotate: giftTravelAnim.interpolate({
+                          inputRange: [0, 0.4, 0.8, 1],
+                          outputRange: ['-12deg', '10deg', '-4deg', '0deg'],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                {/* STAGE 2: Gift box bursts open & fades out when opening */}
+                <Animated.View
+                  style={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [
+                      {
+                        scale: boxOpenAnim.interpolate({
+                          inputRange: [0, 0.6, 1],
+                          outputRange: [1, 1.25, 1.5],
+                        }),
+                      },
+                    ],
+                    opacity: boxOpenAnim.interpolate({
+                      inputRange: [0, 0.45, 1],
+                      outputRange: [1, 0.85, 0],
+                    }),
+                  }}
+                >
+                  <Text style={styles.giftBoxEmoji}>🎁</Text>
+                </Animated.View>
+              </Animated.View>
+
+              {/* STAGE 2: The Inner Revealed Gift (springs from 50% to full 100% size upon opening) */}
+              <Animated.View
+                style={[
+                  styles.revealedGiftLayer,
+                  {
+                    transform: [
+                      {
+                        scale: giftRevealAnim.interpolate({
+                          inputRange: [0, 0.7, 1, 1.15],
+                          outputRange: [0.5, 1.15, 1.0, 1.12],
+                        }),
+                      },
+                      {
+                        translateY: giftRevealAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [14, 0],
+                        }),
+                      },
+                    ],
+                    opacity: boxOpenAnim.interpolate({
+                      inputRange: [0, 0.25, 1],
+                      outputRange: [0, 0.9, 1],
+                    }),
+                  },
+                ]}
+              >
+                {/* Back ambient colored glow */}
+                <View
+                  style={[
+                    styles.giftGlowCircle,
+                    {
+                      backgroundColor: activeCelebration.accentColor
+                        ? `${activeCelebration.accentColor}40`
+                        : 'rgba(246, 85, 146, 0.40)',
+                    },
+                  ]}
+                />
+                <Text style={styles.justTheGiftEmoji}>{activeCelebration.emoji}</Text>
+              </Animated.View>
+            </Animated.View>
+          </View>
         )}
 
         {/* Modals */}
@@ -504,37 +626,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#271D20',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 8
   },
   // Status Badge on Top Right of Card
-  cardStatusBadgeWrap: {
+  cardStatusBadge: {
     position: 'absolute',
     top: 16,
     right: 16,
     zIndex: 25,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  cardStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    gap: 5,
-  },
-  cardStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardStatusText: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   // Gradient + Glass effect overlay directly at the bottom of the card
   glassOverlayWrap: {
@@ -662,11 +771,6 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
   },
   actionBtnBlur: {
     width: '100%',
@@ -684,54 +788,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     zIndex: 50,
-    shadowColor: '#ff69b4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 20,
-    elevation: 15,
   },
-  // Celebration Gift Animation Overlay
+  // Celebration Gift Animation Overlay (Unboxing experience matching video call)
   celebrationOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  justTheGiftWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 240,
+    height: 240,
+  },
+  giftBoxLayer: {
     position: 'absolute',
-    top: '35%',
-    left: 0,
-    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 60,
+    width: 170,
+    height: 170,
   },
-  celebrationGlowBack: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 105, 180, 0.25)',
+  giftBoxEmoji: {
+    fontSize: 112,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 10 },
+    textShadowRadius: 26,
+  },
+  revealedGiftLayer: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF69B4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 30,
-    elevation: 12,
+    width: 230,
+    height: 230,
   },
-  celebrationBigEmoji: {
-    fontSize: 64,
+  giftGlowCircle: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
   },
-  celebrationBanner: {
-    marginTop: 14,
-    backgroundColor: 'rgba(30, 20, 24, 0.9)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#FF69B4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  celebrationBannerText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+  justTheGiftEmoji: {
+    fontSize: 130,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 10 },
+    textShadowRadius: 28,
   },
 });

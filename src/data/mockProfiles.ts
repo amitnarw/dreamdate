@@ -20,6 +20,24 @@ export interface Profile {
   totalCalls: number;
 }
 
+export const FAKE_CALL_VIDEOS: string[] = [
+  'https://www.shutterstock.com/shutterstock/videos/3570589437/preview/stock-footage-vertical-video-head-shot-portrait-of-young-pretty-woman-looking-at-camera-on-video-call-pov.mp4',
+  'https://www.shutterstock.com/shutterstock/videos/4096491699/preview/stock-footage-face-video-call-and-woman-in-home-with-smile-greeting-and-communication-in-living-room.mp4',
+  'https://www.shutterstock.com/shutterstock/videos/3726950727/preview/stock-footage-vertical-format-video-of-girl-vlogger-look-at-camera-talk-make-live-video-conference-call-online.mp4',
+  'https://www.shutterstock.com/shutterstock/videos/3487071257/preview/stock-footage-girl-making-call-me-or-i-ll-call-you-concept-imitating-phone-with-her-hands.mp4',
+  'https://www.shutterstock.com/shutterstock/videos/4011216959/preview/stock-footage-call-me-gesture-by-female-doctor-for-consulting-vertical.mp4',
+  'https://www.shutterstock.com/shutterstock/videos/3676550169/preview/stock-footage-woman-video-conference-and-face-with-night-list-and-counting-as-online-english-teacher-in-steps.mp4',
+  'https://media.gettyimages.com/id/1325103390/video/young-woman-video-chats.mp4',
+  'https://media.gettyimages.com/id/1354225241/video/woman-having-video-call-with-her-friend.mp4',
+  'https://media.gettyimages.com/id/2222590788/video/teenage-content-creator-making-social-media-video.mp4',
+  'https://media.gettyimages.com/id/2174413133/video/the-young-vlogger-communicates-with-fans-via-video-calls.mp4',
+  'https://media.gettyimages.com/id/1680197637/video/woman-talking-in-a-videocall-on-the-screen-of-a-smartphone.mp4',
+  'https://media.gettyimages.com/id/1298691168/video/transgender-woman-on-a-video-chat-at-home-webcam-personal-perspective.mp4',
+  'https://media.gettyimages.com/id/1386939789/video/beautiful-black-woman-vlogging.mp4',
+  'https://media.gettyimages.com/id/2264379518/video/happy-gen-z-asian-woman-smiles-while-having-a-video-call-on-smart-phone-in-public-park.mp4',
+  'https://media.gettyimages.com/id/2196158992/video/teenager-friendly-greeting-on-a-video-call.mp4',
+];
+
 export const MOCK_PROFILES: Profile[] = [
   {
     id: 'emily-1',
@@ -28,13 +46,13 @@ export const MOCK_PROFILES: Profile[] = [
     city: 'California',
     country: 'USA',
     language: ['English'],
-    avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC5vA0UDg1dH_z7HvxnhzWLsgDjle0J94giuIB3kmQc6YzPtV3LiJ0STJTyiBrH-khWUYX1CMRDx3DUpK2hLlKv6T6m0GuZdZzy8qYBTQycshNXRBkcTs9u4Ov95mui_KyrfJQlioYRymyuzCm7gC0H00V-jOXEI8IYzLx4Ek-38T14-uDqVaSyUg_BR2Wy5DZyXUO3Bv_VT__xjwiKqwl4jvCihevY0H5XMAoBUVGWQebIGM2B7g8',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     callRate: 40,
     isOnline: true,
-    tagline: 'Online now! Video call me anytime ❤️',
+    tagline: 'Online now! Video call me anytime',
     interests: ['Swimming', 'Dancing', 'Reading'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[0],
     bio: "Looking for someone who's passionate about life, enjoys deep conversations, and isn't afraid to try new things.",
     totalCalls: 1840,
   },
@@ -49,9 +67,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.8,
     callRate: 50,
     isOnline: false,
-    tagline: 'Busy right now, leave a message or chat with me! ✨',
+    tagline: 'Busy right now, leave a message or chat with me',
     interests: ['Fashion', 'Acting', 'Cocktails'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[1],
     bio: 'New York model with a spark for adventure. Always down for late-night laughs and real connections.',
     totalCalls: 2190,
   },
@@ -66,9 +84,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 5.0,
     callRate: 45,
     isOnline: true,
-    tagline: 'Warm vibes only. Call me for a midnight chat! 🌙',
+    tagline: 'Warm vibes only. Call me for a midnight chat',
     interests: ['Music', 'Nightlife', 'Travel', 'Art'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[2],
     bio: 'Miami local, love beach sunsets, good music, and authentic conversations. Tap video call to connect!',
     totalCalls: 3410,
   },
@@ -83,9 +101,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.9,
     callRate: 40,
     isOnline: true,
-    tagline: 'British charm, sweet talks & endless laughter ☕',
+    tagline: 'British charm, sweet talks and endless laughter',
     interests: ['Art', 'Reading', 'Coffee', 'Architecture'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[3],
     bio: 'Living in Central London. Passionate about literature, cozy cafe talks, and genuine friendships.',
     totalCalls: 1680,
   },
@@ -100,9 +118,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.8,
     callRate: 35,
     isOnline: true,
-    tagline: 'Sunny smile, ready to brighten your day 😊',
+    tagline: 'Sunny smile, ready to brighten your day',
     interests: ['Photography', 'Yoga', 'Hiking', 'Film'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[4],
     bio: 'LA native working in film. Love creative minds and late-night spontaneous face-to-face calls.',
     totalCalls: 1250,
   },
@@ -117,9 +135,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 5.0,
     callRate: 60,
     isOnline: true,
-    tagline: 'Direct 1-on-1 private call waiting for you 💋',
+    tagline: 'Direct 1-on-1 private call waiting for you',
     interests: ['Swimming', 'Dancing', 'Reading'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[5],
     bio: "Looking for someone who's passionate about life, enjoys deep conversations, and isn't afraid to try new things.",
     totalCalls: 4500,
   },
@@ -134,9 +152,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.9,
     callRate: 50,
     isOnline: true,
-    tagline: 'Tropical warmth and island smiles 🌺',
+    tagline: 'Tropical warmth and island smiles',
     interests: ['Cat', 'Football', 'Fashion', 'Chinese'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[6],
     bio: 'Island resident, model and fitness enthusiast. Love connecting with people from all around.',
     totalCalls: 3100,
   },
@@ -151,9 +169,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.9,
     callRate: 45,
     isOnline: true,
-    tagline: 'High fashion & cozy conversations ✨',
+    tagline: 'High fashion and cozy conversations',
     interests: ['Dining', 'Wine', 'Glamour', 'Art'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[7],
     bio: 'Milan fashion designer and wine lover. Connect with me for a sophisticated private chat.',
     totalCalls: 1980,
   },
@@ -168,9 +186,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.7,
     callRate: 35,
     isOnline: true,
-    tagline: 'Parisian vibes, sweet dreams 🥐',
+    tagline: 'Parisian vibes, sweet dreams',
     interests: ['Modeling', 'Runway', 'French', 'Cinema'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[8],
     bio: 'Living near Montmartre. Passionate about romantic conversations and meeting sweet souls.',
     totalCalls: 890,
   },
@@ -185,9 +203,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.9,
     callRate: 40,
     isOnline: true,
-    tagline: 'Online now! Video call karo na baat karte hain ❤️',
+    tagline: 'Online now! Video call and chat with me',
     interests: ['Late Night Talks', 'Music', 'Bollywood'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[9],
     bio: 'Mumbai glam model, loves deep conversations, laughing, and meeting sweet people. Call me anytime!',
     totalCalls: 1420,
   },
@@ -202,9 +220,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 4.8,
     callRate: 50,
     isOnline: true,
-    tagline: 'Sweet and glamorous late night talks ✨',
+    tagline: 'Sweet and glamorous late night talks',
     interests: ['Bhangra', 'Travel', 'Cocktails', 'Nightlife'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[10],
     bio: 'Bubbly girl looking for genuine friends. Let’s connect on a private video call!',
     totalCalls: 2190,
   },
@@ -219,9 +237,9 @@ export const MOCK_PROFILES: Profile[] = [
     rating: 5.0,
     callRate: 60,
     isOnline: true,
-    tagline: 'Direct 1-on-1 private video call available 💋',
+    tagline: 'Direct 1-on-1 private video call available',
     interests: ['Acting', 'Fitness', 'Nightlife', 'Cinema'],
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    videoUrl: FAKE_CALL_VIDEOS[11],
     bio: 'Goa influencer & model. Super warm, lively, and always ready to make your night special.',
     totalCalls: 3410,
   }
@@ -230,42 +248,100 @@ export const MOCK_PROFILES: Profile[] = [
 export interface VirtualGift {
   id: string;
   name: string;
-  icon: string;
+  emoji: string;
+  icon: any;
+  image: string;
   coins: number;
   category: 'Popular' | 'Luxury' | 'Romance' | 'VIP';
   description: string;
+  accentColor: string;
+  glowColor: string;
 }
 
 export const VIRTUAL_GIFTS: VirtualGift[] = [
   // Popular
-  { id: 'rose', name: 'Red Rose', icon: '🌹', coins: 10, category: 'Popular', description: 'Sweet gesture' },
-  { id: 'lollipop', name: 'Sweet Candy', icon: '🍭', coins: 20, category: 'Popular', description: 'Sweet treat' },
-  { id: 'coffee', name: 'Warm Latte', icon: '☕', coins: 30, category: 'Popular', description: 'Cozy vibes' },
-  { id: 'sparkles', name: 'Magic Sparkles', icon: '✨', coins: 40, category: 'Popular', description: 'Brighten her day' },
-  { id: 'heart', name: 'Heart Flame', icon: '💖', coins: 50, category: 'Popular', description: 'True affection' },
-  { id: 'kiss', name: 'Sweet Kiss', icon: '💋', coins: 80, category: 'Popular', description: 'Sending love' },
+  { id: 'rose', name: 'Red Rose', emoji: '🌹', icon: 'flower', image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80', coins: 10, category: 'Popular', description: 'Sweet gesture', accentColor: '#FF2A6D', glowColor: 'rgba(255, 42, 109, 0.4)' },
+  { id: 'lollipop', name: 'Sweet Candy', emoji: '🍭', icon: 'ice-cream', image: 'https://images.unsplash.com/photo-1575224300306-1b8da36134ec?auto=format&fit=crop&w=600&q=80', coins: 20, category: 'Popular', description: 'Sweet treat', accentColor: '#FF69B4', glowColor: 'rgba(255, 105, 180, 0.4)' },
+  { id: 'coffee', name: 'Warm Latte', emoji: '☕', icon: 'cafe', image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=600&q=80', coins: 30, category: 'Popular', description: 'Cozy vibes', accentColor: '#C48A57', glowColor: 'rgba(196, 138, 87, 0.4)' },
+  { id: 'sparkles', name: 'Magic Sparkles', emoji: '✨', icon: 'sparkles', image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80', coins: 40, category: 'Popular', description: 'Brighten her day', accentColor: '#FFD700', glowColor: 'rgba(255, 215, 0, 0.4)' },
+  { id: 'heart', name: 'Heart Flame', emoji: '❤️‍🔥', icon: 'heart', image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=600&q=80', coins: 50, category: 'Popular', description: 'True affection', accentColor: '#EF4444', glowColor: 'rgba(239, 68, 68, 0.4)' },
+  { id: 'kiss', name: 'Sweet Kiss', emoji: '💋', icon: 'heart-circle', image: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=600&q=80', coins: 80, category: 'Popular', description: 'Sending love', accentColor: '#F43F5E', glowColor: 'rgba(244, 63, 94, 0.4)' },
 
   // Romance
-  { id: 'bouquet', name: 'Rose Bouquet', icon: '💐', coins: 120, category: 'Romance', description: '100 Roses' },
-  { id: 'love-letter', name: 'Secret Note', icon: '💌', coins: 150, category: 'Romance', description: 'Private confession' },
-  { id: 'chocolate', name: 'Choco Box', icon: '🍫', coins: 180, category: 'Romance', description: 'Delicious treat' },
-  { id: 'teddy', name: 'Giant Teddy', icon: '🧸', coins: 250, category: 'Romance', description: 'Warm hugs' },
-  { id: 'fireworks', name: 'Fireworks', icon: '🎆', coins: 350, category: 'Romance', description: 'Sky celebration' },
-  { id: 'heart-box', name: 'Velvet Gift', icon: '🎁', coins: 400, category: 'Romance', description: 'Special surprise' },
+  { id: 'bouquet', name: 'Rose Bouquet', emoji: '💐', icon: 'flower-outline', image: 'https://images.unsplash.com/photo-1561181286-d3fee7d55364?auto=format&fit=crop&w=600&q=80', coins: 120, category: 'Romance', description: '100 Roses', accentColor: '#F472B6', glowColor: 'rgba(244, 114, 182, 0.4)' },
+  { id: 'love-letter', name: 'Secret Note', emoji: '💌', icon: 'mail', image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=600&q=80', coins: 150, category: 'Romance', description: 'Private confession', accentColor: '#FB7185', glowColor: 'rgba(251, 113, 133, 0.4)' },
+  { id: 'chocolate', name: 'Choco Box', emoji: '🍫', icon: 'cube', image: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?auto=format&fit=crop&w=600&q=80', coins: 180, category: 'Romance', description: 'Delicious treat', accentColor: '#92400E', glowColor: 'rgba(146, 64, 14, 0.4)' },
+  { id: 'teddy', name: 'Giant Teddy', emoji: '🧸', icon: 'happy', image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=600&q=80', coins: 250, category: 'Romance', description: 'Warm hugs', accentColor: '#D97706', glowColor: 'rgba(217, 119, 6, 0.4)' },
+  { id: 'fireworks', name: 'Fireworks', emoji: '🎆', icon: 'color-wand', image: 'https://images.unsplash.com/photo-1498931299472-f7a63a5a1cfa?auto=format&fit=crop&w=600&q=80', coins: 350, category: 'Romance', description: 'Sky celebration', accentColor: '#A855F7', glowColor: 'rgba(168, 85, 247, 0.4)' },
+  { id: 'heart-box', name: 'Velvet Gift', emoji: '🎁', icon: 'gift', image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=600&q=80', coins: 400, category: 'Romance', description: 'Special surprise', accentColor: '#EC4899', glowColor: 'rgba(236, 72, 153, 0.4)' },
 
   // Luxury
-  { id: 'cocktail', name: 'Pink Martini', icon: '🍸', coins: 100, category: 'Luxury', description: 'VIP toast' },
-  { id: 'perfume', name: 'Chanel Scent', icon: '💄', coins: 300, category: 'Luxury', description: 'Luxury fragrance' },
-  { id: 'champagne', name: 'Dom Pérignon', icon: '🍾', coins: 450, category: 'Luxury', description: 'Pop the bottle' },
-  { id: 'handbag', name: 'Designer Bag', icon: '👜', coins: 600, category: 'Luxury', description: 'Haute couture' },
-  { id: 'ring', name: 'Diamond Ring', icon: '💍', coins: 800, category: 'Luxury', description: 'Forever shine' },
-  { id: 'crown', name: 'Queen Tiara', icon: '👑', coins: 1200, category: 'Luxury', description: 'Fit for royalty' },
+  { id: 'cocktail', name: 'Pink Martini', emoji: '🍸', icon: 'wine', image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=600&q=80', coins: 100, category: 'Luxury', description: 'VIP toast', accentColor: '#06B6D4', glowColor: 'rgba(6, 182, 212, 0.4)' },
+  { id: 'perfume', name: 'Chanel Scent', emoji: '💎', icon: 'flask', image: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=600&q=80', coins: 300, category: 'Luxury', description: 'Luxury fragrance', accentColor: '#38BDF8', glowColor: 'rgba(56, 189, 248, 0.4)' },
+  { id: 'champagne', name: 'Dom Pérignon', emoji: '🍾', icon: 'beer', image: 'https://images.unsplash.com/photo-1569919659476-f0852f6834b7?auto=format&fit=crop&w=600&q=80', coins: 450, category: 'Luxury', description: 'Pop the bottle', accentColor: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.4)' },
+  { id: 'handbag', name: 'Designer Bag', emoji: '👜', icon: 'briefcase', image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80', coins: 600, category: 'Luxury', description: 'Haute couture', accentColor: '#E11D48', glowColor: 'rgba(225, 29, 72, 0.4)' },
+  { id: 'ring', name: 'Diamond Ring', emoji: '💍', icon: 'disc', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=600&q=80', coins: 800, category: 'Luxury', description: 'Forever shine', accentColor: '#67E8F9', glowColor: 'rgba(103, 232, 249, 0.5)' },
+  { id: 'crown', name: 'Queen Tiara', emoji: '👑', icon: 'ribbon', image: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=600&q=80', coins: 1200, category: 'Luxury', description: 'Fit for royalty', accentColor: '#FBBF24', glowColor: 'rgba(251, 191, 36, 0.5)' },
 
   // VIP
-  { id: 'supercar', name: 'Neon Supercar', icon: '🏎️', coins: 2000, category: 'VIP', description: 'V12 power' },
-  { id: 'helicopter', name: 'VIP Heli Ride', icon: '🚁', coins: 3500, category: 'VIP', description: 'City lights tour' },
-  { id: 'yacht', name: 'Sunset Yacht', icon: '🛥️', coins: 5000, category: 'VIP', description: 'Ocean cruise' },
-  { id: 'castle', name: 'Royal Castle', icon: '🏰', coins: 7500, category: 'VIP', description: 'Fairytale romance' },
-  { id: 'jet', name: 'Private Jet', icon: '✈️', coins: 10000, category: 'VIP', description: 'First class escape' },
-  { id: 'rocket', name: 'To The Moon', icon: '🚀', coins: 15000, category: 'VIP', description: 'Galactic love' },
+  { id: 'supercar', name: 'Neon Supercar', emoji: '🏎️', icon: 'car-sport', image: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=600&q=80', coins: 2000, category: 'VIP', description: 'V12 power', accentColor: '#EF4444', glowColor: 'rgba(239, 68, 68, 0.5)' },
+  { id: 'helicopter', name: 'VIP Heli Ride', emoji: '🚁', icon: 'airplane', image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=600&q=80', coins: 3500, category: 'VIP', description: 'City lights tour', accentColor: '#3B82F6', glowColor: 'rgba(59, 130, 246, 0.5)' },
+  { id: 'yacht', name: 'Sunset Yacht', emoji: '🛥️', icon: 'boat', image: 'https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=600&q=80', coins: 5000, category: 'VIP', description: 'Ocean cruise', accentColor: '#0284C7', glowColor: 'rgba(2, 132, 199, 0.5)' },
+  { id: 'castle', name: 'Royal Castle', emoji: '🏰', icon: 'business', image: 'https://images.unsplash.com/photo-1533158307587-828f0a76ef96?auto=format&fit=crop&w=600&q=80', coins: 7500, category: 'VIP', description: 'Fairytale romance', accentColor: '#8B5CF6', glowColor: 'rgba(139, 92, 246, 0.5)' },
+  { id: 'jet', name: 'Private Jet', emoji: '🛩️', icon: 'airplane', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80', coins: 10000, category: 'VIP', description: 'First class escape', accentColor: '#6366F1', glowColor: 'rgba(99, 102, 241, 0.5)' },
+  { id: 'rocket', name: 'To The Moon', emoji: '🚀', icon: 'rocket', image: 'https://images.unsplash.com/photo-1517976487502-575020411a78?auto=format&fit=crop&w=600&q=80', coins: 15000, category: 'VIP', description: 'Galactic love', accentColor: '#F97316', glowColor: 'rgba(249, 115, 22, 0.5)' },
 ];
+
+export function findGiftVisual(nameOrIcon?: string): { emoji: string; name: string; coins: number; accentColor: string; glowColor: string; image: string } {
+  if (!nameOrIcon) {
+    return { emoji: '🎁', name: 'Gift', coins: 100, accentColor: '#F65592', glowColor: 'rgba(246, 85, 146, 0.4)', image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=600&q=80' };
+  }
+  const clean = nameOrIcon.trim().toLowerCase();
+  const matched = VIRTUAL_GIFTS.find(
+    (g) =>
+      g.name.toLowerCase() === clean ||
+      g.id.toLowerCase() === clean ||
+      g.icon.toLowerCase() === clean ||
+      g.emoji === clean ||
+      clean.includes(g.name.toLowerCase()) ||
+      clean.includes(g.id.toLowerCase()) ||
+      clean.includes(g.emoji)
+  );
+  if (matched) {
+    return {
+      emoji: matched.emoji,
+      name: matched.name,
+      coins: matched.coins,
+      accentColor: matched.accentColor,
+      glowColor: matched.glowColor,
+      image: matched.image,
+    };
+  }
+  // Fallbacks for common legacy names
+  if (clean.includes('plane') || clean.includes('airplace') || clean.includes('jet')) {
+    return { emoji: '🛩️', name: 'Private Jet', coins: 10000, accentColor: '#6366F1', glowColor: 'rgba(99, 102, 241, 0.5)', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('cream') || clean.includes('candy') || clean.includes('ice')) {
+    return { emoji: '🍭', name: 'Sweet Candy', coins: 20, accentColor: '#FF69B4', glowColor: 'rgba(255, 105, 180, 0.4)', image: 'https://images.unsplash.com/photo-1575224300306-1b8da36134ec?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('rose') || clean.includes('flower')) {
+    return { emoji: '🌹', name: 'Red Rose', coins: 10, accentColor: '#FF2A6D', glowColor: 'rgba(255, 42, 109, 0.4)', image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('car')) {
+    return { emoji: '🏎️', name: 'Neon Supercar', coins: 2000, accentColor: '#EF4444', glowColor: 'rgba(239, 68, 68, 0.5)', image: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('ring') || clean.includes('diamond')) {
+    return { emoji: '💍', name: 'Diamond Ring', coins: 800, accentColor: '#67E8F9', glowColor: 'rgba(103, 232, 249, 0.5)', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('crown') || clean.includes('tiara')) {
+    return { emoji: '👑', name: 'Queen Tiara', coins: 1200, accentColor: '#FBBF24', glowColor: 'rgba(251, 191, 36, 0.5)', image: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('yacht') || clean.includes('boat')) {
+    return { emoji: '🛥️', name: 'Sunset Yacht', coins: 5000, accentColor: '#0284C7', glowColor: 'rgba(2, 132, 199, 0.5)', image: 'https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=600&q=80' };
+  }
+  if (clean.includes('heli')) {
+    return { emoji: '🚁', name: 'VIP Heli Ride', coins: 3500, accentColor: '#3B82F6', glowColor: 'rgba(59, 130, 246, 0.5)', image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=600&q=80' };
+  }
+  return { emoji: '🎁', name: nameOrIcon, coins: 100, accentColor: '#F65592', glowColor: 'rgba(246, 85, 146, 0.4)', image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=600&q=80' };
+}
+

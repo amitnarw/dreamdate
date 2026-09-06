@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Modal,
   StyleSheet,
   Text,
@@ -13,6 +12,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppModal from './AppModal';
+import CoinIcon from './CoinIcon';
+import { useTheme } from '../context/ThemeContext';
 import { addCoins } from '../services/wallet';
 
 interface Props {
@@ -24,17 +26,18 @@ interface DayReward {
   day: number;
   coins: number;
   label: string;
-  icon: string;
+  isCoinReward: boolean;
+  iconName?: keyof typeof Ionicons.glyphMap;
 }
 
 const CHECKIN_REWARDS: DayReward[] = [
-  { day: 1, coins: 50, label: 'Day 1', icon: '🪙' },
-  { day: 2, coins: 75, label: 'Day 2', icon: '🪙' },
-  { day: 3, coins: 100, label: 'Day 3', icon: '🪙' },
-  { day: 4, coins: 150, label: 'Day 4', icon: '🪙' },
-  { day: 5, coins: 200, label: 'Day 5', icon: '💎' },
-  { day: 6, coins: 300, label: 'Day 6', icon: '💎' },
-  { day: 7, coins: 500, label: 'Day 7', icon: '🎁' },
+  { day: 1, coins: 50, label: 'Day 1', isCoinReward: true },
+  { day: 2, coins: 75, label: 'Day 2', isCoinReward: true },
+  { day: 3, coins: 100, label: 'Day 3', isCoinReward: true },
+  { day: 4, coins: 150, label: 'Day 4', isCoinReward: true },
+  { day: 5, coins: 200, label: 'Day 5', isCoinReward: false, iconName: 'diamond' },
+  { day: 6, coins: 300, label: 'Day 6', isCoinReward: false, iconName: 'diamond' },
+  { day: 7, coins: 500, label: 'Day 7', isCoinReward: false, iconName: 'gift' },
 ];
 
 const STORAGE_DAY_KEY = '@dreamdate_checkin_current_day';
@@ -42,9 +45,11 @@ const STORAGE_DATE_KEY = '@dreamdate_last_checkin_timestamp';
 
 export default function DailyCheckInModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [alreadyClaimedToday, setAlreadyClaimedToday] = useState(false);
   const [justClaimedAmount, setJustClaimedAmount] = useState<number | null>(null);
+  const [claimSuccessModalVisible, setClaimSuccessModalVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -101,42 +106,78 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {}
 
-    Alert.alert(
-      '🎉 Daily Bonus Claimed!',
-      `You received ${reward.coins} Coins!\n\nConsistency Streak: Day ${reward.day} Completed! Keep checking in daily for bigger rewards.`,
-      [{ text: 'Great!', onPress: () => {} }]
-    );
+    setClaimSuccessModalVisible(true);
   };
 
   const todayReward = CHECKIN_REWARDS[currentDayIndex];
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetWrap}>
+        <View
+          style={[
+            styles.sheetWrap,
+            {
+              backgroundColor: isDark
+                ? 'rgba(26, 17, 20, 0.98)'
+                : 'rgba(255, 255, 255, 0.98)',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(0, 0, 0, 0.06)',
+            },
+          ]}
+        >
           <BlurView
             intensity={90}
-            tint="dark"
+            tint={isDark ? 'dark' : 'light'}
             style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}
           >
             {/* Header: Title + Streak Pill + Close Button */}
             <View style={styles.header}>
               <View style={styles.headerTitleCol}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.title}>Daily Check-In</Text>
+                  <Text
+                    style={[
+                      styles.title,
+                      { color: isDark ? '#F1E0E4' : '#191C1D' },
+                    ]}
+                  >
+                    Daily Check-In
+                  </Text>
                   <View style={styles.streakBadge}>
+                    <Ionicons name="flame" size={12} color="#F65592" />
                     <Text style={styles.streakBadgeText}>
-                      🔥 Day {currentDayIndex + 1} of 7
+                      Day {currentDayIndex + 1} of 7
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.subtitle}>
+                <Text
+                  style={[
+                    styles.subtitle,
+                    { color: isDark ? 'rgba(241, 224, 228, 0.65)' : '#6B7280' },
+                  ]}
+                >
                   Check in daily to increase your rewards. Missing a day resets the streak!
                 </Text>
               </View>
 
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
-                <Ionicons name="close" size={20} color="#F1E0E4" />
+              <TouchableOpacity
+                onPress={onClose}
+                style={[
+                  styles.closeBtn,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(61, 50, 53, 0.85)'
+                      : 'rgba(0, 0, 0, 0.06)',
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={isDark ? '#F1E0E4' : '#191C1D'}
+                />
               </TouchableOpacity>
             </View>
 
@@ -153,24 +194,65 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
                     key={reward.day}
                     style={[
                       styles.dayCard,
-                      isToday && styles.dayCardToday,
-                      isClaimed && styles.dayCardClaimed,
+                      {
+                        backgroundColor: isToday
+                          ? isDark
+                            ? 'rgba(246, 85, 146, 0.22)'
+                            : 'rgba(246, 85, 146, 0.14)'
+                          : isClaimed
+                          ? isDark
+                            ? 'rgba(20, 30, 24, 0.50)'
+                            : 'rgba(74, 222, 128, 0.12)'
+                          : isDark
+                          ? 'rgba(39, 29, 32, 0.70)'
+                          : 'rgba(0, 0, 0, 0.04)',
+                        borderColor: isToday
+                          ? '#F65592'
+                          : isClaimed
+                          ? '#4ADE80'
+                          : isDark
+                          ? 'rgba(255, 255, 255, 0.06)'
+                          : 'rgba(0, 0, 0, 0.06)',
+                      },
                     ]}
                   >
                     <Text
                       style={[
                         styles.dayNumber,
-                        isToday && { color: '#FFF', fontWeight: '800' },
+                        {
+                          color: isToday
+                            ? isDark ? '#FFFFFF' : '#191C1D'
+                            : isDark ? 'rgba(241, 224, 228, 0.6)' : '#6B7280',
+                          fontWeight: isToday ? '800' : '600',
+                        },
                       ]}
                     >
                       {reward.label}
                     </Text>
 
                     <View style={styles.dayIconBox}>
-                      <Text style={{ fontSize: 24 }}>{reward.icon}</Text>
+                      {reward.isCoinReward ? (
+                        <CoinIcon
+                          size={22}
+                          color={isToday ? '#FFD700' : isClaimed ? '#4ADE80' : '#F65592'}
+                        />
+                      ) : (
+                        <Ionicons
+                          name={reward.iconName || 'gift'}
+                          size={20}
+                          color={isToday ? '#FFD700' : isClaimed ? '#4ADE80' : '#F65592'}
+                        />
+                      )}
                     </View>
 
-                    <Text style={styles.dayCoinsText}>+{reward.coins}</Text>
+                    <Text
+                      style={[
+                        styles.dayCoinsText,
+                        { color: isDark ? '#FFD700' : '#D97706' },
+                      ]}
+                    >
+                      +{reward.coins}
+                    </Text>
 
                     {isClaimed ? (
                       <View style={styles.claimedBadge}>
@@ -182,7 +264,11 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
                       </View>
                     ) : (
                       <View style={styles.lockedBadge}>
-                        <Ionicons name="lock-closed" size={10} color="rgba(241, 224, 228, 0.4)" />
+                        <Ionicons
+                          name="lock-closed"
+                          size={10}
+                          color={isDark ? 'rgba(241, 224, 228, 0.4)' : '#9CA3AF'}
+                        />
                       </View>
                     )}
                   </View>
@@ -190,32 +276,84 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
               })}
             </View>
 
-            {/* Day 7 Highlight Card (Treasure Box) */}
+            {/* Day 7 Highlight Card (Premium Mystery Chest) */}
             {(() => {
               const day7 = CHECKIN_REWARDS[6];
               const isClaimed7 = currentDayIndex === 6 && alreadyClaimedToday;
               const isToday7 = currentDayIndex === 6 && !alreadyClaimedToday;
 
+              const day7Colors = isDark
+                ? (isToday7 ? ['#54360B', '#8C5A12', '#452A05'] : ['#2E1F0E', '#3D2A14', '#241608'])
+                : (isToday7 ? ['#FFF8E1', '#FEEFC3', '#FDE49E'] : ['#FAF5EB', '#F5EBD7', '#EDE0C4']);
+
               return (
                 <LinearGradient
-                  colors={
-                    isToday7
-                      ? ['#4A2131', '#7A2244', '#3E1524']
-                      : ['rgba(39, 29, 32, 0.85)', 'rgba(30, 20, 24, 0.95)']
-                  }
+                  colors={day7Colors as [string, string, ...string[]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={[styles.day7Card, isToday7 && styles.day7CardToday]}
+                  style={[
+                    styles.day7Card,
+                    isToday7 && styles.day7CardToday,
+                    {
+                      borderColor: isToday7
+                        ? '#FFD700'
+                        : isDark
+                        ? 'rgba(255, 215, 0, 0.25)'
+                        : 'rgba(217, 119, 6, 0.25)',
+                    },
+                  ]}
                 >
                   <View style={styles.day7Left}>
-                    <Text style={styles.day7Title}>Day 7 • Mystery Chest</Text>
-                    <Text style={styles.day7Sub}>Consecutive check-in grand prize</Text>
-                    <View style={styles.day7CoinsPill}>
-                      <Text style={styles.day7CoinsText}>+{day7.coins} Free Coins 🪙</Text>
+                    <View style={styles.day7BadgeRow}>
+                      <View style={[styles.day7GoldBadge, { backgroundColor: isDark ? 'rgba(255, 215, 0, 0.20)' : 'rgba(217, 119, 6, 0.15)' }]}>
+                        <Ionicons name="sparkles" size={11} color={isDark ? '#FFD700' : '#D97706'} />
+                        <Text style={[styles.day7GoldBadgeText, { color: isDark ? '#FFD700' : '#D97706' }]}>
+                          GRAND PRIZE
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.day7Title,
+                        { color: isDark ? '#FFF4CC' : '#451A03' },
+                      ]}
+                    >
+                      Day 7 • Royal Mystery Chest
+                    </Text>
+                    <Text
+                      style={[
+                        styles.day7Sub,
+                        { color: isDark ? 'rgba(255, 235, 170, 0.75)' : '#78350F' },
+                      ]}
+                    >
+                      Consecutive check-in ultimate treasure
+                    </Text>
+                    <View
+                      style={[
+                        styles.day7CoinsPill,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255, 215, 0, 0.22)'
+                            : 'rgba(217, 119, 6, 0.18)',
+                          borderColor: isDark
+                            ? 'rgba(255, 215, 0, 0.40)'
+                            : 'rgba(217, 119, 6, 0.30)',
+                        },
+                      ]}
+                    >
+                      <CoinIcon size={16} color={isDark ? '#FFD700' : '#D97706'} />
+                      <Text
+                        style={[
+                          styles.day7CoinsText,
+                          { color: isDark ? '#FFD700' : '#B45309' },
+                        ]}
+                      >
+                        +{day7.coins} Free Coins
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.day7Right}>
-                    <Text style={{ fontSize: 44 }}>🎁</Text>
+                    <Ionicons name="gift" size={42} color={isDark ? '#FFD700' : '#D97706'} />
                     {isClaimed7 ? (
                       <View style={styles.claimedBadge}>
                         <Ionicons name="checkmark" size={14} color="#FFF" />
@@ -255,12 +393,27 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
                 <Text style={styles.claimBtnText}>
                   {alreadyClaimedToday
                     ? 'Checked In Today • Come Back Tomorrow'
-                    : `Claim Day ${todayReward.day} Bonus (+${todayReward.coins} 🪙)`}
+                    : `Claim Day ${todayReward.day} Bonus (+${todayReward.coins} Coins)`}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
           </BlurView>
         </View>
+
+        {/* Daily Bonus Claimed Custom Modal */}
+        <AppModal
+          visible={claimSuccessModalVisible}
+          useModalHost={false}
+          onClose={() => setClaimSuccessModalVisible(false)}
+          title="Daily Bonus Claimed!"
+          description={`You received +${justClaimedAmount || todayReward.coins} Coins!\n\nConsistency Streak: Day ${todayReward.day} Completed! Keep checking in daily for bigger rewards.`}
+          icon="gift-outline"
+          iconColor="#FFD700"
+          primaryAction={{
+            label: 'Awesome!',
+            onPress: () => setClaimSuccessModalVisible(false),
+          }}
+        />
       </View>
     </Modal>
   );
@@ -304,6 +457,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: 'rgba(246, 85, 146, 0.22)',
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -347,10 +503,6 @@ const styles = StyleSheet.create({
   },
   dayCardToday: {
     backgroundColor: 'rgba(246, 85, 146, 0.22)',
-    shadowColor: '#F65592',
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
-    elevation: 4,
   },
   dayCardClaimed: {
     opacity: 0.6,
@@ -407,12 +559,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
-  day7CardToday: {
-    shadowColor: '#F65592',
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 6,
-  },
+  day7CardToday: {},
   day7Left: {
     gap: 4,
   },
@@ -425,10 +572,31 @@ const styles = StyleSheet.create({
     color: 'rgba(241, 224, 228, 0.7)',
     fontSize: 11,
   },
+  day7BadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  day7GoldBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+  },
+  day7GoldBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
   day7CoinsPill: {
-    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 12,
     alignSelf: 'flex-start',
     marginTop: 4,

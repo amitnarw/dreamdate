@@ -111,27 +111,75 @@ export const MidnightEleganceTheme = {
     },
   },
   shadows: {
-    neonGlow: {
-      shadowColor: '#F65592',
-      shadowOpacity: 0.5,
-      shadowRadius: 18,
-      elevation: 8,
-    },
-    superGiftGlow: {
-      shadowColor: '#FF69B4',
-      shadowOpacity: 0.6,
-      shadowRadius: 20,
-      elevation: 10,
-    },
-    softGlow: {
-      shadowColor: '#F65592',
-      shadowOpacity: 0.25,
-      shadowRadius: 10,
-      elevation: 4,
-    },
+    neonGlow: {},
+    superGiftGlow: {},
+    softGlow: {},
   },
 };
 
+export const DaylightEleganceTheme = {
+  name: 'Daylight Elegance',
+  colors: {
+    // Level 0: Foundations
+    midnightVoid: '#F6F7F9',
+    surface: '#FFFFFF',
+    surfaceDim: '#EDEDF1',
+    surfaceBright: '#FFFFFF',
+    surfaceContainerLowest: '#FFFFFF',
+    surfaceContainerLow: '#F8F9FA',
+    surfaceContainer: '#F1F3F5',
+    surfaceContainerHigh: '#E9ECEF',
+    surfaceContainerHighest: '#DEE2E6',
+    surfaceVariant: '#E9ECEF',
+    background: '#F6F7F9',
+
+    // Content
+    onSurface: '#191C1D',
+    onBackground: '#191C1D',
+    onSurfaceVariant: '#5D6066',
+
+    // Primary Accents (Rose Magenta & Pinks)
+    primary: '#F65592',
+    primaryContainer: '#F65592',
+    onPrimary: '#FFFFFF',
+    onPrimaryContainer: '#59002A',
+    inversePrimary: '#FFB1C6',
+    neonMagenta: '#E0006C',
+    superPinkGlow: '#FF69B4',
+
+    // Secondary & Neutral Variants
+    secondary: '#505459',
+    secondaryContainer: '#E2E6EA',
+    onSecondary: '#212529',
+    onSecondaryContainer: '#343A40',
+    tertiary: '#6C757D',
+    tertiaryContainer: '#CED4DA',
+
+    // Outlines & Borders
+    outline: '#CED4DA',
+    outlineVariant: '#E5E7EB',
+    glassStroke: 'rgba(0, 0, 0, 0.08)',
+    glassStrokeStrong: 'rgba(0, 0, 0, 0.16)',
+    glassPanel: 'rgba(255, 255, 255, 0.85)',
+
+    // System Indicators
+    successGreen: '#16A34A',
+    liveGreen: '#16A34A',
+    goldCoin: '#D97706',
+    error: '#DC2626',
+    errorContainer: '#FEE2E2',
+  },
+  spacing: MidnightEleganceTheme.spacing,
+  rounded: MidnightEleganceTheme.rounded,
+  typography: MidnightEleganceTheme.typography,
+  shadows: {
+    neonGlow: {},
+    superGiftGlow: {},
+    softGlow: {},
+  },
+};
+
+export type AppTheme = typeof MidnightEleganceTheme;
 export const StitchTheme = MidnightEleganceTheme;
 
 // Reusable Common Style Presets for 100% Design System Fidelity
@@ -189,11 +237,11 @@ export const CommonMidnightStyles = {
 
 export const Colors = {
   light: {
-    text: MidnightEleganceTheme.colors.onSurface,
-    background: MidnightEleganceTheme.colors.surface,
-    backgroundElement: MidnightEleganceTheme.colors.surfaceContainer,
-    backgroundSelected: MidnightEleganceTheme.colors.surfaceVariant,
-    textSecondary: MidnightEleganceTheme.colors.onSurfaceVariant,
+    text: DaylightEleganceTheme.colors.onSurface,
+    background: DaylightEleganceTheme.colors.surface,
+    backgroundElement: DaylightEleganceTheme.colors.surfaceContainer,
+    backgroundSelected: DaylightEleganceTheme.colors.surfaceVariant,
+    textSecondary: DaylightEleganceTheme.colors.onSurfaceVariant,
   },
   dark: {
     text: MidnightEleganceTheme.colors.onSurface,

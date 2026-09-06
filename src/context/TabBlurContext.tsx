@@ -1,38 +1,48 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 
-interface TabBlurContextType {
-  tabTargetRef: React.RefObject<View | null>;
-  blurTargetKey: number;
+export interface TabBlurTargets {
+  index: React.RefObject<View | null>;
+  history: React.RefObject<View | null>;
+  profile: React.RefObject<View | null>;
 }
 
+interface TabBlurContextType {
+  targets: TabBlurTargets;
+  tabVersion: number;
+  notifyTargetMounted: () => void;
+}
+
+const defaultRef: React.RefObject<View | null> = { current: null };
+
 export const TabBlurContext = createContext<TabBlurContextType>({
-  tabTargetRef: { current: null },
-  blurTargetKey: 0,
+  targets: {
+    index: defaultRef,
+    history: defaultRef,
+    profile: defaultRef,
+  },
+  tabVersion: 0,
+  notifyTargetMounted: () => {},
 });
 
 export function TabBlurProvider({ children }: { children: React.ReactNode }) {
-  const [blurTargetKey, setBlurTargetKey] = useState(0);
+  const indexRef = useRef<View | null>(null);
+  const historyRef = useRef<View | null>(null);
+  const profileRef = useRef<View | null>(null);
+  const [tabVersion, setTabVersion] = useState(0);
 
-  const tabTargetRef = useMemo<React.RefObject<View | null>>(() => {
-    let inner: View | null = null;
-    return {
-      get current() {
-        return inner;
-      },
-      set current(node: View | null) {
-        if (node && node !== inner) {
-          inner = node;
-          setBlurTargetKey((k) => k + 1);
-        } else if (!node) {
-          inner = null;
-        }
-      },
-    };
-  }, []);
+  const targets = useMemo<TabBlurTargets>(() => ({
+    index: indexRef,
+    history: historyRef,
+    profile: profileRef,
+  }), []);
+
+  const notifyTargetMounted = () => {
+    setTabVersion((v) => v + 1);
+  };
 
   return (
-    <TabBlurContext.Provider value={{ tabTargetRef, blurTargetKey }}>
+    <TabBlurContext.Provider value={{ targets, tabVersion, notifyTargetMounted }}>
       {children}
     </TabBlurContext.Provider>
   );

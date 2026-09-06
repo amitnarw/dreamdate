@@ -1,13 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import AppBlurView from '../../components/AppBlurView';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BackHandler,
   FlatList,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,141 +14,173 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ExitConfirmationModal from '../../components/ExitConfirmationModal';
-import RechargeModal from '../../components/RechargeModal';
-import { StitchTheme } from '../../constants/theme';
+import AppBackground from '../../components/AppBackground';
+import AppBlurView from '../../components/AppBlurView';
+import AppHeader from '../../components/AppHeader';
+import AppModal from '../../components/AppModal';
 import { useTabBlur } from '../../context/TabBlurContext';
+import { useTheme } from '../../context/ThemeContext';
 import { MOCK_PROFILES, Profile } from '../../data/mockProfiles';
 import { useWallet } from '../../services/wallet';
 
-function GridProfileCard({ item, index, router }: { item: Profile; index: number; router: any }) {
+function GridProfileCard({
+  item,
+  index,
+  router,
+}: {
+  item: Profile;
+  index: number;
+  router: any;
+}) {
   const isBusy = index === 1;
-  const [cardBlurKey, setCardBlurKey] = useState(0);
-
-  const cardTargetRef = useMemo<React.RefObject<View | null>>(() => {
-    let inner: View | null = null;
-    return {
-      get current() {
-        return inner;
-      },
-      set current(node: View | null) {
-        if (node && node !== inner) {
-          inner = node;
-          setCardBlurKey((k) => k + 1);
-        } else if (!node) {
-          inner = null;
-        }
-      },
-    };
-  }, []);
+  const { theme, isDark } = useTheme();
 
   return (
     <TouchableOpacity
-      style={styles.gridCard}
+      style={[
+        styles.gridCard,
+        {
+          backgroundColor: isDark ? '#1C1618' : '#FFFFFF',
+        },
+      ]}
       onPress={() => router.push(`/profile/${item.id}` as any)}
       activeOpacity={0.9}
     >
-      <BlurTargetView ref={cardTargetRef} style={StyleSheet.absoluteFill}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#271D20' }]} />
-        {item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={StyleSheet.absoluteFill} />
-        ) : null}
-        <View style={styles.cardGradient} />
-      </BlurTargetView>
+      {/* Background & Avatar Image */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: isDark ? '#271D20' : '#E9ECEF' },
+        ]}
+      />
+      {item.avatar ? (
+        <Image source={{ uri: item.avatar }} style={StyleSheet.absoluteFill} />
+      ) : null}
 
-      {/* Status Badge (Online / Busy) with centralized AppBlurView */}
-      <View style={styles.statusBadgeWrap}>
-        <AppBlurView
-          key={`badge-blur-${cardBlurKey}`}
-          blurTarget={cardTargetRef}
-          style={styles.statusBadge}
+      {/* Smooth Vertical Gradient Fade (No Hard Cutoff, No Black Corners) */}
+      <LinearGradient
+        colors={
+          isDark
+            ? [
+                'transparent',
+                'rgba(14, 10, 12, 0.0)',
+                'rgba(14, 10, 12, 0.60)',
+                'rgba(14, 10, 12, 0.95)',
+              ]
+            : [
+                'transparent',
+                'rgba(255, 255, 255, 0.0)',
+                'rgba(255, 255, 255, 0.72)',
+                'rgba(255, 255, 255, 0.98)',
+              ]
+        }
+        locations={[0, 0.40, 0.72, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
+      {/* Status Badge (Online / Busy) - Colored Badge Without Dot */}
+      <View
+        style={[
+          styles.statusBadge,
+          {
+            backgroundColor: isBusy ? '#E11D48' : '#10B981',
+          },
+        ]}
+      >
+        <Text style={styles.statusText}>
+          {isBusy ? 'Busy' : 'Online'}
+        </Text>
+      </View>
+
+      {/* Companion Details at Bottom */}
+      <View style={styles.cardGlassPanel} pointerEvents="none">
+        <Text
+          style={[
+            styles.cardName,
+            { color: isDark ? '#FFFFFF' : '#191C1D' },
+          ]}
+          numberOfLines={1}
         >
-          <View
-            style={[
-              styles.statusDot,
-              {
-                backgroundColor: isBusy
-                  ? StitchTheme.colors.surfaceVariant
-                  : StitchTheme.colors.liveGreen,
-              },
-            ]}
+          {item.name}, {item.age}
+        </Text>
+        <View style={styles.cardLocationRow}>
+          <Ionicons
+            name="location-sharp"
+            size={11}
+            color={isDark ? 'rgba(223, 190, 198, 0.90)' : '#5A606B'}
           />
           <Text
             style={[
-              styles.statusText,
-              isBusy && { color: StitchTheme.colors.onSurfaceVariant },
+              styles.cardCity,
+              { color: isDark ? 'rgba(223, 190, 198, 0.90)' : '#5A606B' },
             ]}
+            numberOfLines={1}
           >
-            {isBusy ? 'Busy' : 'Online'}
-          </Text>
-        </AppBlurView>
-      </View>
-
-      {/* Bottom Glass Panel (Details) with centralized AppBlurView */}
-      <View style={styles.cardBottomWrap}>
-        <AppBlurView
-          key={`card-blur-${cardBlurKey}`}
-          blurTarget={cardTargetRef}
-          style={styles.cardGlassPanel}
-        >
-          <Text style={styles.cardName} numberOfLines={1}>
-            {item.name.split(' ')[0]}, {item.age}
-          </Text>
-          <Text style={styles.cardCity} numberOfLines={1}>
             {item.city}
           </Text>
+        </View>
+      </View>
 
-          {/* Chat & Video Call Quick Actions */}
-          <View style={styles.cardActionsRow}>
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push(`/chat/${item.id}` as any);
-              }}
-              style={styles.actionBtnIcon}
-              activeOpacity={0.75}
-            >
-              <Ionicons
-                name="chatbubble"
-                size={15}
-                color={StitchTheme.colors.primaryContainer}
-              />
-            </TouchableOpacity>
+      {/* Vertical Action Column on the Right Side */}
+      <View style={styles.cardVerticalActionsCol}>
+        {/* Top Button: Circular Chat Button with Centered Icon */}
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            router.push(`/chat/${item.id}` as any);
+          }}
+          style={[
+            styles.actionCircleBlurBtn,
+            {
+              backgroundColor: isDark
+                ? 'rgba(28, 18, 22, 0.85)'
+                : '#FFFFFF',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.15)'
+                : 'rgba(0, 0, 0, 0.08)',
+            },
+          ]}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="chatbubble-ellipses"
+            size={18}
+            color={isDark ? '#FFF' : '#F65592'}
+          />
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push(`/call/${item.id}` as any);
-              }}
-              style={styles.actionBtnIcon}
-              activeOpacity={0.75}
-            >
-              <Ionicons
-                name="videocam"
-                size={16}
-                color={StitchTheme.colors.primaryContainer}
-              />
-            </TouchableOpacity>
-          </View>
-        </AppBlurView>
+        {/* Bottom Button: Circular Vibrant Primary Pink Video Call Button */}
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            router.push(`/call/${item.id}` as any);
+          }}
+          style={styles.actionCircleSolidBtn}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="videocam" size={18} color="#FFF" />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-export default function FollowingHomepageGrid() {
+export default function HomeScreen() {
   const router = useRouter();
-  const { coins } = useWallet();
-  const { tabTargetRef } = useTabBlur();
-  const [rechargeVisible, setRechargeVisible] = useState(false);
+  const { theme, isDark } = useTheme();
+  const { targets, notifyTargetMounted } = useTabBlur();
   const [exitModalVisible, setExitModalVisible] = useState(false);
 
-  // When on homescreen and user presses back, show confirmation modal to close or not the app
+  useEffect(() => {
+    notifyTargetMounted();
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         setExitModalVisible(true);
-        return true; // Prevent default app exit, show confirmation modal
+        return true;
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -158,121 +189,103 @@ export default function FollowingHomepageGrid() {
   );
 
   return (
-    <BlurTargetView ref={tabTargetRef} style={{ flex: 1, backgroundColor: '#1A1114' }}>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* TopAppBar 100% exact to Stitch with centralized AppBlurView */}
-        <AppBlurView style={styles.header}>
-        <View style={styles.brandRow}>
-          <Ionicons name="heart" size={24} color={StitchTheme.colors.primaryContainer} />
-          <Text style={styles.brandTitle}>DreamDate</Text>
-        </View>
+    <BlurTargetView
+      ref={targets.index}
+      style={[
+        styles.container,
+        { overflow: 'hidden' },
+      ]}
+    >
+      <AppBackground>
+        <SafeAreaView
+          style={styles.container}
+          edges={['left', 'right']}
+        >
+          {/* Standardized AppHeader (Consistent with Female Details Page) */}
+          <AppHeader
+            title="DreamDate"
+            showCoins={true}
+            leftElement={
+              <View style={styles.brandCircle}>
+                <Ionicons name="heart" size={18} color="#F65592" />
+              </View>
+            }
+          />
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.coinPill}
-            onPress={() => setRechargeVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.coinEmoji}>🪙</Text>
-            <Text style={styles.coinAmount}>{coins}</Text>
-          </TouchableOpacity>
-        </View>
-      </AppBlurView>
+          {/* Scroll Area with Top/Bottom Edge Fades */}
+          <View style={{ flex: 1, position: 'relative' }}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Discover Section Title */}
+              <View style={styles.titleRow}>
+                <Text
+                  style={[
+                    styles.headlineText,
+                    { color: isDark ? '#FFFFFF' : '#191C1D' },
+                  ]}
+                >
+                  Discover
+                </Text>
+              </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Following / Discover Title Bar */}
-        <View style={styles.titleRow}>
-          <Text style={styles.headlineText}>Discover</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={styles.viewAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Grid List */}
+              <FlatList
+                data={MOCK_PROFILES}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                columnWrapperStyle={styles.gridRow}
+                scrollEnabled={false}
+                renderItem={({ item, index }) => (
+                  <GridProfileCard
+                    item={item}
+                    index={index}
+                    router={router}
+                  />
+                )}
+              />
+            </ScrollView>
+          </View>
 
-        {/* Following Grid (1:1 Stitch Layout) */}
-        <FlatList
-          data={MOCK_PROFILES}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          scrollEnabled={false}
-          columnWrapperStyle={styles.gridRow}
-          renderItem={({ item, index }: { item: Profile; index: number }) => (
-            <GridProfileCard item={item} index={index} router={router} />
-          )}
-        />
-      </ScrollView>
-
-      <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
-
-      <ExitConfirmationModal
-        visible={exitModalVisible}
-        onClose={() => setExitModalVisible(false)}
-        onExit={() => BackHandler.exitApp()}
-      />
-    </SafeAreaView>
-  </BlurTargetView>
-);
+          {/* Exit Confirmation Dialog */}
+          <AppModal
+            visible={exitModalVisible}
+            onClose={() => setExitModalVisible(false)}
+            title="Exit DreamDate?"
+            description="Are you sure you want to exit the app? Your conversations and coins will be saved."
+            icon="log-out"
+            primaryAction={{
+              label: 'Exit App',
+              onPress: () => BackHandler.exitApp(),
+              variant: 'destructive',
+            }}
+            secondaryAction={{
+              label: 'Stay',
+              onPress: () => setExitModalVisible(false),
+            }}
+          />
+        </SafeAreaView>
+      </AppBackground>
+    </BlurTargetView>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1114', // Exact background color from detail screen (#1A1114)
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(26, 17, 20, 0.85)',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: StitchTheme.colors.primaryContainer,
-    letterSpacing: -0.6,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  coinPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(246, 85, 146, 0.15)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+  brandCircle: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    gap: 6,
-  },
-  coinEmoji: {
-    fontSize: 14,
-  },
-  coinAmount: {
-    color: StitchTheme.colors.goldCoin,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  glassCircleWrap: {
-    borderRadius: 19,
-    overflow: 'hidden',
-  },
-  glassCircleBtn: {
-    width: 38,
-    height: 38,
-    backgroundColor: 'rgba(30, 32, 32, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(246, 85, 146, 0.12)',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingTop: 10,
     paddingBottom: 110,
     gap: 16,
   },
@@ -284,50 +297,11 @@ const styles = StyleSheet.create({
   headlineText: {
     fontSize: 22,
     fontWeight: '700',
-    color: StitchTheme.colors.onSurface,
     letterSpacing: -0.3,
   },
   viewAllText: {
     fontSize: 12,
     fontWeight: '600',
-    color: StitchTheme.colors.secondary,
-  },
-  storiesScroll: {
-    gap: 16,
-    paddingVertical: 6,
-  },
-  storyItem: {
-    alignItems: 'center',
-    gap: 6,
-    width: 66,
-  },
-  storyRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyRingActive: {
-    backgroundColor: StitchTheme.colors.primaryContainer,
-    shadowColor: StitchTheme.colors.primaryContainer,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  storyRingInactive: {
-    backgroundColor: StitchTheme.colors.surfaceVariant,
-  },
-  storyImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 30,
-  },
-  storyName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: StitchTheme.colors.onSurface,
   },
   gridRow: {
     justifyContent: 'space-between',
@@ -336,75 +310,89 @@ const styles = StyleSheet.create({
   gridCard: {
     width: '48%',
     height: 260,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#271D20',
   },
-  cardGradient: {
+  statusBadge: {
+    position: 'absolute',
+    top: 9,
+    left: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  cardGlassPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingRight: 48,
+    gap: 2,
+    zIndex: 5,
+  },
+  cardName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cardLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  cardCity: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  topScrollFade: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    height: 18,
+    zIndex: 15,
   },
-  statusBadgeWrap: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(28, 18, 22, 0.40)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: StitchTheme.colors.onSurface,
-  },
-  cardBottomWrap: {
+  bottomScrollFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    overflow: 'hidden',
+    height: 28,
+    zIndex: 15,
   },
-  cardGlassPanel: {
-    backgroundColor: 'rgba(28, 18, 22, 0.70)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 2,
-  },
-  cardName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: StitchTheme.colors.onSurface,
-  },
-  cardCity: {
-    fontSize: 10,
-    color: StitchTheme.colors.onSurfaceVariant,
-    marginBottom: 4,
-  },
-  cardActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
+  cardVerticalActionsCol: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
     alignItems: 'center',
+    gap: 8,
+    zIndex: 20,
   },
-  actionBtnIcon: {
-    padding: 2,
+  actionCircleBlurBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionCircleSolidBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F65592',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

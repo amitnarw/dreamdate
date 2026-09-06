@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import CoinIcon from './CoinIcon';
 import { Profile } from '../data/mockProfiles';
 
 interface Props {
@@ -48,7 +49,8 @@ export default function ProfileCard({ profile }: Props) {
         {/* Call Rate Badge */}
         <View style={styles.rateBadgeWrap}>
           <BlurView intensity={50} tint="dark" style={styles.rateBadge}>
-            <Text style={styles.rateText}>🪙 {profile.callRate}/m</Text>
+            <CoinIcon size={11} color="#FFD700" style={{ marginRight: 3 }} />
+            <Text style={styles.rateText}>{profile.callRate}/m</Text>
           </BlurView>
         </View>
 
@@ -153,6 +155,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(12, 15, 16, 0.65)',
     paddingHorizontal: 7,
     paddingVertical: 3,
@@ -241,10 +245,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
     gap: 4,
-    shadowColor: '#F65592',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
   },
   callBtnText: {
     color: '#FFF',
