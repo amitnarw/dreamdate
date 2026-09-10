@@ -158,7 +158,9 @@ export default function LoginScreen() {
             <View
               style={[
                 styles.checkboxBox,
-                acceptedTerms && styles.checkboxBoxChecked,
+                acceptedTerms
+                  ? styles.checkboxBoxChecked
+                  : { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' },
               ]}
             >
               {acceptedTerms && (
@@ -287,8 +289,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.45)',
   },
   ageBadgeText: {
     color: '#EF4444',
@@ -328,11 +328,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 8,
   },
   brandTitle: {
     fontSize: 34,
@@ -373,8 +368,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 4,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   perkEmoji: {
     fontSize: 16,
@@ -404,8 +397,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 20,
     gap: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.25)',
   },
   bonusText: {
     color: '#FFD700',
@@ -415,27 +406,22 @@ const styles = StyleSheet.create({
   agreementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   checkboxBox: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    borderWidth: 1.8,
-    borderColor: '#6B7280',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   checkboxBoxChecked: {
     backgroundColor: '#F65592',
-    borderColor: '#F65592',
   },
   agreementTextWrap: {
     flex: 1,
@@ -453,16 +439,8 @@ const styles = StyleSheet.create({
   fastLoginButton: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  fastLoginButtonDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
+  fastLoginButtonDisabled: {},
   buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',

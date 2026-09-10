@@ -25,7 +25,7 @@ import BackButton from '../../components/BackButton';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
-import { ARCHETYPE_META, MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
+import { MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -385,29 +385,6 @@ export default function UserProfileDetail1to1() {
                   </View>
                 </View>
 
-                {/* Personality Archetype Pill */}
-                {(() => {
-                  const meta = ARCHETYPE_META[profile.archetype] || ARCHETYPE_META.playful_tease;
-                  return (
-                    <View
-                      style={[
-                        styles.profileArchetypePill,
-                        {
-                          backgroundColor: meta.badgeColor + '2E',
-                          borderColor: meta.badgeColor + '65',
-                        },
-                      ]}
-                    >
-                      <Text style={styles.profileArchetypeEmoji}>{meta.emoji}</Text>
-                      <Text style={styles.profileArchetypeLabel}>{meta.label}</Text>
-                      <Text style={styles.profileArchetypeDot}>•</Text>
-                      <Text style={styles.profileArchetypeVibe} numberOfLines={1}>
-                        {meta.vibe}
-                      </Text>
-                    </View>
-                  );
-                })()}
-
                 {/* Bio Text */}
                 <Text style={styles.bioText} numberOfLines={3}>
                   {profile.bio}
@@ -431,19 +408,24 @@ export default function UserProfileDetail1to1() {
               return (
                 <TouchableOpacity
                   key={idx}
-                  style={[
-                    styles.thumbnailItem,
-                    isSelected ? styles.thumbnailItemActive : styles.thumbnailItemInactive,
-                  ]}
+                  style={styles.thumbnailItem}
                   onPress={() => handleSelectPhoto(uri)}
                   activeOpacity={0.85}
                 >
-                  <ExpoImage
-                    source={{ uri }}
-                    style={styles.thumbnailImg}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
+                  <View
+                    style={[
+                      StyleSheet.absoluteFill,
+                      isSelected ? styles.thumbnailItemActive : styles.thumbnailItemInactive,
+                    ]}
+                  >
+                    <ExpoImage
+                      source={{ uri }}
+                      style={styles.thumbnailImg}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  </View>
+                  {isSelected && <View style={styles.thumbnailActiveDot} />}
                 </TouchableOpacity>
               );
             })}
@@ -454,16 +436,33 @@ export default function UserProfileDetail1to1() {
         {/* BEGIN: Primary Action Row: Chat | Video Call (Center Glow) | Gift */}
         <View style={[styles.primaryActionRow, { bottom: Math.max(insets.bottom, 16) + 12 }]}>
           {/* Chat Button (Left) */}
-          <TouchableOpacity
-            style={styles.actionBtnWrap}
-            onPress={() => router.push(`/chat/${profile.id}` as any)}
-            activeOpacity={0.8}
-            accessibilityLabel="Chat"
-          >
-            <AppBlurView style={styles.actionBtnBlur}>
-              <Ionicons name="chatbubble" size={24} color="#FFF" />
-            </AppBlurView>
-          </TouchableOpacity>
+          <View style={styles.actionBtnShadow}>
+            <TouchableOpacity
+              style={styles.actionBtnWrap}
+              onPress={() => router.push(`/chat/${profile.id}` as any)}
+              activeOpacity={0.8}
+              accessibilityLabel="Chat"
+            >
+              <AppBlurView
+                blurTarget={imageTargetRef}
+                style={[
+                  styles.actionBtnBlur,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(28, 18, 22, 0.50)'
+                      : 'rgba(255, 255, 255, 0.85)',
+                  },
+                ]}
+                tint={isDark ? 'dark' : 'light'}
+              >
+                <Ionicons
+                  name="chatbubble"
+                  size={24}
+                  color={isDark ? '#FFFFFF' : '#191C1D'}
+                />
+              </AppBlurView>
+            </TouchableOpacity>
+          </View>
 
           {/* Video Call Button (Center - Prominent Neon Glow Button) */}
           <TouchableOpacity
@@ -476,16 +475,33 @@ export default function UserProfileDetail1to1() {
           </TouchableOpacity>
 
           {/* Gift Button (Right) */}
-          <TouchableOpacity
-            style={styles.actionBtnWrap}
-            onPress={() => setGiftModalVisible(true)}
-            activeOpacity={0.85}
-            accessibilityLabel="Send Gift"
-          >
-            <AppBlurView style={styles.actionBtnBlur}>
-              <Ionicons name="gift" size={24} color="#FFF" />
-            </AppBlurView>
-          </TouchableOpacity>
+          <View style={styles.actionBtnShadow}>
+            <TouchableOpacity
+              style={styles.actionBtnWrap}
+              onPress={() => setGiftModalVisible(true)}
+              activeOpacity={0.85}
+              accessibilityLabel="Send Gift"
+            >
+              <AppBlurView
+                blurTarget={imageTargetRef}
+                style={[
+                  styles.actionBtnBlur,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(28, 18, 22, 0.50)'
+                      : 'rgba(255, 255, 255, 0.85)',
+                  },
+                ]}
+                tint={isDark ? 'dark' : 'light'}
+              >
+                <Ionicons
+                  name="gift"
+                  size={24}
+                  color={isDark ? '#FFFFFF' : '#191C1D'}
+                />
+              </AppBlurView>
+            </TouchableOpacity>
+          </View>
         </View>
         {/* END: Primary Action Row */}
 
@@ -740,35 +756,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
   },
-  profileArchetypePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 5,
-    marginVertical: 4,
-  },
-  profileArchetypeEmoji: {
-    fontSize: 13,
-  },
-  profileArchetypeLabel: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  profileArchetypeDot: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-  },
-  profileArchetypeVibe: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 11,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
   // Bio (text-sm text-white/90 leading-relaxed font-light)
   bioText: {
     fontSize: 13,
@@ -794,17 +781,29 @@ const styles = StyleSheet.create({
     width: 52,
     height: 66,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#1E1418',
-    borderWidth: 2.5,
+    overflow: 'visible',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   thumbnailItemActive: {
-    borderColor: '#F65592',
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#1E1418',
     opacity: 1,
   },
   thumbnailItemInactive: {
-    borderColor: 'transparent',
-    opacity: 0.55,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#1E1418',
+    opacity: 0.5,
+  },
+  thumbnailActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F65592',
+    marginTop: 4,
   },
   thumbnailImg: {
     width: '100%',
@@ -820,6 +819,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 22,
     zIndex: 40,
+  },
+  actionBtnShadow: {
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
   },
   actionBtnWrap: {
     width: 56,

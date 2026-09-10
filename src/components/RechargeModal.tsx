@@ -60,9 +60,6 @@ export default function RechargeModal({ visible, onClose }: Props) {
               backgroundColor: isDark
                 ? 'rgba(18, 20, 20, 0.94)'
                 : 'rgba(255, 255, 255, 0.96)',
-              borderColor: isDark
-                ? 'rgba(255, 255, 255, 0.08)'
-                : 'rgba(0, 0, 0, 0.08)',
             },
           ]}
         >
@@ -115,12 +112,11 @@ export default function RechargeModal({ visible, onClose }: Props) {
                       {
                         backgroundColor: isSelected
                           ? isDark
-                            ? 'rgba(246, 85, 146, 0.25)'
-                            : 'rgba(246, 85, 146, 0.14)'
+                            ? 'rgba(246, 85, 146, 0.22)'
+                            : 'rgba(246, 85, 146, 0.12)'
                           : isDark
                           ? '#1E2020'
                           : '#F3F4F6',
-                        borderColor: isSelected ? '#F65592' : 'transparent',
                       },
                     ]}
                     onPress={() => setSelectedPackId(pack.id)}
@@ -132,7 +128,13 @@ export default function RechargeModal({ visible, onClose }: Props) {
                         <Text
                           style={[
                             styles.packCoins,
-                            { color: isDark ? '#E2E2E2' : '#191C1D' },
+                            {
+                              color: isSelected
+                                ? '#F65592'
+                                : isDark
+                                ? '#E2E2E2'
+                                : '#191C1D',
+                            },
                           ]}
                         >
                           {pack.coinsAwarded} Coins
@@ -236,8 +238,13 @@ const styles = StyleSheet.create({
   cardWrap: {
     width: '100%',
     maxWidth: 380,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    elevation: 8,
   },
   card: {
     backgroundColor: 'rgba(18, 20, 20, 0.88)',
@@ -272,10 +279,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#1E2020',
-    borderRadius: 14,
+    borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderWidth: 1.5,
   },
   packLeft: {
     gap: 2,

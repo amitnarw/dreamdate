@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useSegments } from 'expo-router';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { initFirstRunEngagement } from '../services/engagementService';
 import { addCoins } from '../services/wallet';
 
 export interface AuthUser {
@@ -102,6 +103,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+
+      // Kick off the first-run engagement funnel (pre-seed thread, schedule
+      // the first-message + missed-call notifications).
+      try {
+        await initFirstRunEngagement();
       } catch (e) {}
 
       router.replace('/(tabs)' as any);

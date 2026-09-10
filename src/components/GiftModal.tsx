@@ -303,7 +303,6 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
                                     : isDark
                                     ? 'rgba(39, 29, 32, 0.70)'
                                     : 'rgba(0, 0, 0, 0.04)',
-                                  borderColor: isSelected ? '#F65592' : 'transparent',
                                 },
                               ]}
                               onPress={() => handleSelectGift(gift)}
@@ -315,12 +314,10 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
                                   styles.iconWrap,
                                   {
                                     backgroundColor: isSelected
-                                      ? `${gift.accentColor}35`
+                                      ? `${gift.accentColor}40`
                                       : isDark
                                       ? 'rgba(255, 255, 255, 0.08)'
                                       : 'rgba(0, 0, 0, 0.05)',
-                                    borderColor: isSelected ? gift.accentColor : 'transparent',
-                                    borderWidth: isSelected ? 1.5 : 0,
                                   },
                                 ]}
                               >
@@ -593,7 +590,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     alignItems: 'center',
     gap: 4,
-    borderWidth: 1.5,
     overflow: 'hidden',
   },
   sheetTopFade: {

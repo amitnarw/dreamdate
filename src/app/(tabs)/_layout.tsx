@@ -84,8 +84,13 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
           styles.floatingGlassPill,
           {
             backgroundColor: isDark
-              ? 'rgba(20, 14, 18, 0.45)'
-              : 'rgba(255, 255, 255, 0.65)',
+              ? 'rgba(20, 14, 18, 0.55)'
+              : 'rgba(255, 255, 255, 0.75)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.25,
+            shadowRadius: 12,
+            elevation: 6,
           },
         ]}
         blurTarget={currentBlurTarget}

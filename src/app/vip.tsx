@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,20 +13,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AppBackground from '../components/AppBackground';
 import AppHeader from '../components/AppHeader';
 import AppModal from '../components/AppModal';
-import CoinIcon from '../components/CoinIcon';
 import PaymentSelectorSheet from '../components/PaymentSelectorSheet';
 import RechargeModal from '../components/RechargeModal';
 import { useTheme } from '../context/ThemeContext';
 import { VIP_WEEKLY_PACKAGE, PaymentPackage } from '../services/paymentService';
 import { useWallet } from '../services/wallet';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 interface VipPerk {
   id: string;
   ionIcon: any;
   title: string;
-  highlight: string;
   description: string;
   color: string;
 }
@@ -37,49 +31,43 @@ const VIP_PERKS: VipPerk[] = [
   {
     id: 'weekly-coins',
     ionIcon: 'trophy',
-    title: 'Weekly Coin Grant',
-    highlight: '1,500 Coins / Week',
-    description: 'Instant 1,500 coins credited immediately upon activation and every week thereafter.',
+    title: '1,500 coins every week',
+    description: 'Credited automatically to your wallet',
     color: '#FFD700',
   },
   {
     id: 'video-discount',
     ionIcon: 'videocam',
-    title: 'Video Call Discount',
-    highlight: '50% OFF Calls',
-    description: 'Enjoy a massive 50% coin rate discount on all 1-on-1 private simulated video calls.',
+    title: '50% off video calls',
+    description: 'Half the coin rate on every private call',
     color: '#F65592',
   },
   {
     id: 'free-chat',
     ionIcon: 'chatbubble-ellipses',
-    title: 'Free Unlimited Chat',
-    highlight: '100% Free',
-    description: 'Send unlimited messages to all female companions without any coin deductions.',
+    title: 'Unlimited free chat',
+    description: 'Message every companion, no coin cost',
     color: '#4ADE80',
   },
   {
     id: 'vip-status',
     ionIcon: 'ribbon',
-    title: 'Elite Gold Badge',
-    highlight: 'VIP Crown Halo',
-    description: 'Distinctive gold crown halo on your profile and elite VIP status across the app.',
+    title: 'Elite gold badge',
+    description: 'Crown halo across the app',
     color: '#FFB800',
   },
   {
     id: 'vip-outfit',
     ionIcon: 'shirt',
-    title: 'Exclusive Wardrobe',
-    highlight: 'Private Photos & Videos',
-    description: 'Unlock exclusive glamour photo sets and video call scenes available only to VIPs.',
+    title: 'Exclusive wardrobe',
+    description: 'Private photos and call scenes',
     color: '#E056FD',
   },
   {
     id: 'coin-bonus',
     ionIcon: 'flash',
-    title: 'Extra Coin Bonus',
-    highlight: '+30% Recharge Bonus',
-    description: 'Get 30% additional bonus coins on every coin pack recharge in your wallet.',
+    title: '+30% recharge bonus',
+    description: 'On every coin pack purchase',
     color: '#FFA500',
   },
 ];
@@ -87,7 +75,7 @@ const VIP_PERKS: VipPerk[] = [
 export default function VipMembershipScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { coins, isVip } = useWallet();
+  const { isVip } = useWallet();
   const { theme, isDark } = useTheme();
 
   const [paymentSheetVisible, setPaymentSheetVisible] = useState(false);
@@ -101,16 +89,20 @@ export default function VipMembershipScreen() {
     setPaymentSheetVisible(true);
   };
 
-  const handleVipSuccess = (pkg: PaymentPackage) => {
+  const handleVipSuccess = (_pkg: PaymentPackage) => {
     setVipSuccessModal(true);
   };
+
+  const text = isDark ? '#FFFFFF' : '#191C1D';
+  const subtle = isDark ? 'rgba(241, 224, 228, 0.65)' : '#5A5F66';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const panelFill = isDark ? 'rgba(30, 32, 32, 0.55)' : '#FFFFFF';
 
   return (
     <AppBackground>
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        {/* Top Header */}
         <AppHeader
-          title="VIP Club"
+          title="VIP Membership"
           showCoins={true}
           showBack={true}
         />
@@ -123,147 +115,110 @@ export default function VipMembershipScreen() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-            {/* VIP Hero Card */}
-            <LinearGradient
-              colors={['#2E1D24', '#3E1928', '#26131C']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <View style={styles.heroCrownCircle}>
-                <Ionicons name="ribbon" size={36} color="#FFD700" />
-              </View>
-              <View style={styles.heroBadge}>
-                <Text style={styles.heroBadgeText}>DREAMDATE VIP CLUB</Text>
-              </View>
-              <Text style={styles.heroTitle}>Weekly VIP Membership</Text>
-              <Text style={styles.heroSubtitle}>
-                Unlock all female companions, 1,500 weekly coins, and 50% discount on video calls.
-              </Text>
-
-              {/* Weekly coins highlight box */}
-              <LinearGradient
-                colors={['rgba(255, 215, 0, 0.22)', 'rgba(255, 105, 180, 0.15)']}
-                style={styles.weeklyCoinsBox}
-              >
-                <CoinIcon size={24} style={{ marginRight: 8 }} />
-                <View>
-                  <Text style={styles.weeklyCoinsTitle}>1,500 Coins Every Week</Text>
-                  <Text style={styles.weeklyCoinsSub}>
-                    Directly added to your offline wallet balance
-                  </Text>
-                </View>
-              </LinearGradient>
-            </LinearGradient>
-
-            {/* Pricing Card */}
-            <View
-              style={[
-                styles.planHighlightCard,
-                {
-                  backgroundColor: isDark ? 'rgba(30, 32, 32, 0.75)' : '#FFFFFF',
-                  borderColor: '#F65592',
-                },
-              ]}
-            >
-              <View style={styles.planBadgeRow}>
-                <View style={styles.popularBadge}>
-                  <Ionicons name="flame" size={12} color="#FFFFFF" />
-                  <Text style={styles.popularBadgeText}>LIMITED TIME OFFER</Text>
-                </View>
-                <Text style={styles.struckPrice}>₹999</Text>
-              </View>
-
-              <View style={styles.planPricingRow}>
-                <View>
-                  <Text style={[styles.planPeriodText, { color: isDark ? '#FFFFFF' : '#111827' }]}>
-                    Weekly All-Access VIP
-                  </Text>
-                  <Text style={[styles.planPeriodSub, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                    7 Days Access + 1,500 Coins Included
-                  </Text>
-                </View>
-                <View style={styles.netPriceWrap}>
-                  <Text style={styles.netPriceAmount}>₹500</Text>
-                  <Text style={styles.netPriceDuration}>/ week</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Section Title */}
-            <View style={styles.sectionHeader}>
-              <Text
+            {/* Header */}
+            <View style={styles.headerBlock}>
+              <View
                 style={[
-                  styles.sectionTitle,
-                  { color: isDark ? '#FFFFFF' : '#191C1D' },
+                  styles.crownBadge,
+                  { backgroundColor: isDark ? 'rgba(255, 215, 0, 0.14)' : 'rgba(255, 215, 0, 0.12)' },
                 ]}
               >
-                All VIP Member Privileges
+                <Ionicons name="ribbon" size={22} color="#FFD700" />
+              </View>
+              <Text style={[styles.title, { color: text }]}>DreamDate VIP</Text>
+              <Text style={[styles.subtitle, { color: subtle }]}>
+                Unlock every companion, weekly coins, and 50% off calls.
               </Text>
-              <Text style={styles.sectionCount}>6 Benefits</Text>
+            </View>
+
+            {/* Plan Card */}
+            <View
+              style={[
+                styles.planCard,
+                { backgroundColor: panelFill },
+              ]}
+            >
+              <View style={styles.planTopRow}>
+                <View>
+                  <Text style={[styles.planName, { color: text }]}>
+                    Weekly All-Access
+                  </Text>
+                  <Text style={[styles.planSub, { color: subtle }]}>
+                    7 days · 1,500 coins included
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.saveBadge,
+                    { backgroundColor: isDark ? 'rgba(246, 85, 146, 0.22)' : 'rgba(246, 85, 146, 0.12)' },
+                  ]}
+                >
+                  <Text style={styles.saveBadgeText}>SAVE 50%</Text>
+                </View>
+              </View>
+
+              <View style={[styles.planDivider, { backgroundColor: dividerColor }]} />
+
+              <View style={styles.priceRow}>
+                <View style={styles.priceWrap}>
+                  <Text style={[styles.struck, { color: subtle }]}>₹999</Text>
+                  <Text style={[styles.price, { color: text }]}>
+                    ₹500<Text style={[styles.priceUnit, { color: subtle }]}> / week</Text>
+                  </Text>
+                </View>
+                <View style={styles.priceMeta}>
+                  <Text style={[styles.priceMetaLabel, { color: subtle }]}>
+                    RENEWABLE WEEKLY
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Perks List */}
-            <View style={styles.perksList}>
-              {VIP_PERKS.map((perk) => (
-                <View
-                  key={perk.id}
-                  style={[
-                    styles.perkCard,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(28, 18, 22, 0.75)'
-                        : '#FFFFFF',
-                      borderColor: isDark
-                        ? 'rgba(255, 255, 255, 0.05)'
-                        : 'rgba(0, 0, 0, 0.06)',
-                      borderWidth: 1,
-                    },
-                  ]}
-                >
-                  <View style={[styles.perkIconWrap, { backgroundColor: `${perk.color}18` }]}>
-                    <Ionicons name={perk.ionIcon} size={22} color={perk.color} />
-                  </View>
-                  <View style={styles.perkInfo}>
-                    <View style={styles.perkHeaderRow}>
-                      <Text
-                        style={[
-                          styles.perkTitle,
-                          { color: isDark ? '#FFFFFF' : '#191C1D' },
-                        ]}
-                      >
-                        {perk.title}
-                      </Text>
-                      <View style={[styles.highlightBadge, { backgroundColor: `${perk.color}25` }]}>
-                        <Text style={[styles.highlightText, { color: perk.color }]}>
-                          {perk.highlight}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text
+            <Text style={[styles.sectionLabel, { color: subtle }]}>
+              WHAT'S INCLUDED
+            </Text>
+
+            <View
+              style={[
+                styles.perksList,
+                { backgroundColor: panelFill },
+              ]}
+            >
+              {VIP_PERKS.map((perk, idx) => (
+                <React.Fragment key={perk.id}>
+                  <View style={styles.perkRow}>
+                    <View
                       style={[
-                        styles.perkDescription,
-                        { color: isDark ? 'rgba(241, 224, 228, 0.65)' : '#5A5F66' },
+                        styles.perkIcon,
+                        { backgroundColor: perk.color + '22' },
                       ]}
                     >
-                      {perk.description}
-                    </Text>
+                      <Ionicons name={perk.ionIcon} size={20} color={perk.color} />
+                    </View>
+                    <View style={styles.perkText}>
+                      <Text style={[styles.perkTitle, { color: text }]}>
+                        {perk.title}
+                      </Text>
+                      <Text style={[styles.perkDesc, { color: subtle }]}>
+                        {perk.description}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                  {idx < VIP_PERKS.length - 1 && (
+                    <View style={[styles.perkDivider, { backgroundColor: dividerColor }]} />
+                  )}
+                </React.Fragment>
               ))}
             </View>
           </ScrollView>
         </View>
 
-        {/* Floating Bottom Purchase Bar */}
+        {/* Bottom CTA */}
         <View
           style={[
             styles.bottomBar,
-            {
-              paddingBottom: Math.max(insets.bottom, 14) + 6,
-              backgroundColor: 'transparent',
-              borderTopWidth: 0,
-            },
+            { paddingBottom: Math.max(insets.bottom, 14) + 6 },
           ]}
         >
           <TouchableOpacity
@@ -271,21 +226,19 @@ export default function VipMembershipScreen() {
             onPress={handleOpenVipPayment}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={['#FF2A7A', '#FF69B4', '#FF416C']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.buyBtnGradient}
-            >
-              <Ionicons name="ribbon" size={20} color="#FFF" style={{ marginRight: 8 }} />
-              <Text style={styles.buyBtnText}>
-                {isVip ? 'Renew Weekly VIP (₹500 / week)' : 'Unlock Weekly VIP (₹500 / week)'}
-              </Text>
-            </LinearGradient>
+            <Ionicons
+              name={isVip ? 'refresh' : 'ribbon'}
+              size={20}
+              color="#FFF"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.buyBtnText}>
+              {isVip ? 'Renew VIP · ₹500 / week' : 'Unlock VIP · ₹500 / week'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Dual Payment Selector Sheet */}
+        {/* Payment Selector Sheet */}
         <PaymentSelectorSheet
           visible={paymentSheetVisible}
           packageItem={VIP_WEEKLY_PACKAGE}
@@ -293,17 +246,17 @@ export default function VipMembershipScreen() {
           onSuccess={handleVipSuccess}
         />
 
-        {/* VIP Success Modal */}
+        {/* Success Modal */}
         <AppModal
           visible={vipSuccessModal}
           useModalHost={false}
           onClose={() => setVipSuccessModal(false)}
-          title="VIP Activated Successfully!"
-          description="Congratulations! You are now a DreamDate VIP Member. 1,500 Coins have been added to your offline wallet and all VIP privileges are unlocked for the week."
+          title="VIP Activated"
+          description="1,500 coins have been added to your wallet. All VIP privileges are now live."
           icon="ribbon"
           iconColor="#FFD700"
           primaryAction={{
-            label: 'Enjoy VIP Access',
+            label: 'Continue',
             onPress: () => {
               setVipSuccessModal(false);
               router.replace('/(tabs)');
@@ -311,7 +264,6 @@ export default function VipMembershipScreen() {
           }}
         />
 
-        {/* Recharge Modal if needed */}
         <RechargeModal
           visible={rechargeVisible}
           onClose={() => setRechargeVisible(false)}
@@ -327,213 +279,156 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 8,
   },
-  heroCard: {
-    borderRadius: 24,
-    padding: 22,
+
+  // Header block (no card)
+  headerBlock: {
     alignItems: 'center',
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.25)',
+    paddingVertical: 24,
+    gap: 8,
   },
-  heroCrownCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+  crownBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  heroBadge: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  heroBadgeText: {
-    color: '#FFD700',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-    paddingHorizontal: 10,
-  },
-  weeklyCoinsBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.35)',
-  },
-  weeklyCoinsTitle: {
-    color: '#FFD700',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  weeklyCoinsSub: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  planHighlightCard: {
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 2,
-    marginBottom: 20,
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  planBadgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  popularBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F65592',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-  },
-  popularBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  struckPrice: {
-    color: '#9CA3AF',
-    textDecorationLine: 'line-through',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  planPricingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  planPeriodText: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  planPeriodSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  netPriceWrap: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  netPriceAmount: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#F65592',
-  },
-  netPriceDuration: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginLeft: 3,
-    fontWeight: '600',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  sectionCount: {
-    fontSize: 12,
-    color: '#F65592',
-    fontWeight: '700',
-  },
-  perksList: {
-    gap: 10,
-  },
-  perkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
-  },
-  perkIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  perkInfo: {
-    flex: 1,
-  },
-  perkHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 4,
   },
-  perkTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
   },
-  highlightBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+  subtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    paddingHorizontal: 20,
   },
-  highlightText: {
-    fontSize: 11,
-    fontWeight: '700',
+
+  // Plan card
+  planCard: {
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 28,
   },
-  perkDescription: {
+  planTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  planName: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  planSub: {
     fontSize: 12,
-    lineHeight: 16,
+    marginTop: 3,
   },
+  saveBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  saveBadgeText: {
+    color: '#F65592',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  planDivider: {
+    height: 1,
+    marginVertical: 14,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  priceWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  struck: {
+    fontSize: 14,
+    textDecorationLine: 'line-through',
+    fontWeight: '500',
+  },
+  price: {
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+  },
+  priceUnit: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  priceMeta: {
+    alignItems: 'flex-end',
+  },
+  priceMetaLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+
+  // Perks list (single tonal panel)
+  perksList: {
+    borderRadius: 22,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  perkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 14,
+  },
+  perkIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  perkText: {
+    flex: 1,
+  },
+  perkTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  perkDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  perkDivider: {
+    height: 1,
+    marginLeft: 52,
+  },
+
+  // Bottom CTA
   bottomBar: {
     paddingHorizontal: 20,
     paddingTop: 10,
   },
   buyBtn: {
+    backgroundColor: '#F65592',
     borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buyBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -541,7 +436,8 @@ const styles = StyleSheet.create({
   },
   buyBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
+    letterSpacing: -0.2,
   },
 });

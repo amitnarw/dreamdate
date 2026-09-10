@@ -101,15 +101,12 @@ export default function AppModal({
           },
         ]}
       >
-        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
           <Animated.View
             style={[
               styles.modalCard,
               {
                 backgroundColor: theme.colors.surface,
-                borderColor: isDark
-                  ? 'rgba(255, 255, 255, 0.08)'
-                  : 'rgba(0, 0, 0, 0.06)',
                 transform: [{ scale: scaleAnim }],
               },
             ]}
@@ -272,13 +269,17 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: 24,
+    borderRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 28,
     paddingBottom: 24,
     alignItems: 'center',
-    borderWidth: 1,
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    elevation: 8,
   },
   closeButton: {
     position: 'absolute',

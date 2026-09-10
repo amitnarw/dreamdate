@@ -221,13 +221,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     gap: 6,
   },
-  tabButtonActive: {
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  tabButtonActive: {},
   tabText: {
     fontSize: 13,
     fontWeight: '600',

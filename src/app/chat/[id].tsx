@@ -25,12 +25,14 @@ import CoinIcon from '../../components/CoinIcon';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
-import { ARCHETYPE_META, MOCK_PROFILES, Profile, findGiftVisual } from '../../data/mockProfiles';
+import { MOCK_PROFILES, Profile, findGiftVisual } from '../../data/mockProfiles';
 import {
     ChatMessage,
+    generateGiftThanks,
     getChatHistory,
     getSimulatedReply,
     saveChatHistory,
+    setReplyContext,
 } from '../../services/chatEngine';
 import { useWallet } from '../../services/wallet';
 
@@ -116,6 +118,7 @@ export default function PremiumChatScreen() {
     scrollToBottom();
 
     // Trigger simulated companion multi-bubble response
+    setReplyContext(profile.id);
     const replyData = getSimulatedReply(text, profile);
     const bubbles = replyData.bubbles && replyData.bubbles.length > 0 ? replyData.bubbles : [replyData.text];
 
@@ -203,12 +206,14 @@ export default function PremiumChatScreen() {
     // Model thanks user for gift
     setTimeout(() => {
       setIsTyping(true);
+      const thanksText = generateGiftThanks(gift.name, profile.archetype || 'playful_tease');
+      const thanksDelay = 1200 + thanksText.length * 36 + Math.floor(Math.random() * 1500);
       setTimeout(() => {
         setIsTyping(false);
         const thanksMsg: ChatMessage = {
           id: 'msg-thanks-' + Date.now(),
           sender: 'profile',
-          text: `Aww thank you so much for the ${gift.name}! You are so sweet. Let's do a video call now!`,
+          text: thanksText,
           timestamp: Date.now(),
           status: 'read',
         };
@@ -258,25 +263,14 @@ export default function PremiumChatScreen() {
               <View style={styles.onlineDot} />
             </View>
             <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text
-                  style={[
-                    styles.name,
-                    { color: isDark ? '#FFFFFF' : '#191C1D' },
-                  ]}
-                >
-                  {profile.name}, {profile.age}
-                </Text>
-                {(() => {
-                  const meta = ARCHETYPE_META[profile.archetype] || ARCHETYPE_META.playful_tease;
-                  return (
-                    <View style={[styles.chatArchetypePill, { backgroundColor: meta.badgeColor + '2E', borderColor: meta.badgeColor + '70' }]}>
-                      <Text style={styles.chatArchetypeEmoji}>{meta.emoji}</Text>
-                      <Text style={[styles.chatArchetypeLabel, { color: meta.badgeColor }]}>{meta.label.split(' ')[0]}</Text>
-                    </View>
-                  );
-                })()}
-              </View>
+              <Text
+                style={[
+                  styles.name,
+                  { color: isDark ? '#FFFFFF' : '#191C1D' },
+                ]}
+              >
+                {profile.name}, {profile.age}
+              </Text>
               <Text
                 style={[
                   styles.locationText,
@@ -360,10 +354,8 @@ export default function PremiumChatScreen() {
                       styles.giftCard,
                       {
                         backgroundColor: isDark
-                          ? 'rgba(28, 24, 30, 0.85)'
-                          : 'rgba(255, 255, 255, 0.95)',
-                        borderWidth: 1.5,
-                        borderColor: visual.accentColor + (isDark ? '80' : '60'),
+                          ? visual.accentColor + '28'
+                          : visual.accentColor + '18',
                       },
                     ]}
                   >
@@ -765,22 +757,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  chatArchetypePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 3,
-  },
-  chatArchetypeEmoji: {
-    fontSize: 10,
-  },
-  chatArchetypeLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
   locationText: {
     color: '#DFBEC6',
     fontSize: 12,
@@ -955,7 +931,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 26,
-    borderWidth: 1,
     overflow: 'hidden',
     gap: 8,
   },

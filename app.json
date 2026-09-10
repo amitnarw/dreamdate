@@ -36,7 +36,22 @@
           "imageWidth": 76
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for private video calls",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for private video calls",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F65592",
+          "defaultChannel": "private-messages"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

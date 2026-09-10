@@ -2,12 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
   Image,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -34,7 +35,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function UserProfileTab() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { coins } = useWallet();
+  const { coins, isVip } = useWallet();
   const { theme, isDark, toggleTheme } = useTheme();
   const { targets, notifyTargetMounted } = useTabBlur();
 
@@ -46,9 +47,10 @@ export default function UserProfileTab() {
   // AppModal dialogs state
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [loggedOutNoticeVisible, setLoggedOutNoticeVisible] = useState(false);
-  const [rateModalVisible, setRateModalVisible] = useState(false);
-  const [rateThanksVisible, setRateThanksVisible] = useState(false);
-  const [userRating, setUserRating] = useState(5);
+  const [lowBalanceModalVisible, setLowBalanceModalVisible] = useState(false);
+
+  const LAST_NUDGE_KEY = '@dreamdate_last_nudge_v1';
+  const CHECKIN_AUTO_KEY = '@dreamdate_checkin_auto_v1';
 
   // Entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -71,15 +73,44 @@ export default function UserProfileTab() {
     ]).start();
   }, []);
 
-  const handleRateSubmit = () => {
-    setRateModalVisible(false);
-    setTimeout(() => {
-      setRateThanksVisible(true);
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {}
-    }, 250);
-  };
+  // Auto-engagement: low-balance nudge (max 1×/day) + auto-open daily check-in
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+
+          // 1) Daily check-in auto-open (once per day)
+          const today = new Date().toDateString();
+          const lastCheckinAuto = await AsyncStorage.getItem(CHECKIN_AUTO_KEY);
+          if (!cancelled && lastCheckinAuto !== today) {
+            await AsyncStorage.setItem(CHECKIN_AUTO_KEY, today);
+            setTimeout(() => {
+              if (!cancelled) setCheckInVisible(true);
+            }, 1200);
+            return;
+          }
+
+          // 2) Low-balance nudge (max once per 24h)
+          if (coins > 0 && coins < 25) {
+            const lastNudge = await AsyncStorage.getItem(LAST_NUDGE_KEY);
+            const lastNudgeTs = lastNudge ? parseInt(lastNudge, 10) : 0;
+            const now = Date.now();
+            if (!cancelled && now - lastNudgeTs > 24 * 60 * 60 * 1000) {
+              await AsyncStorage.setItem(LAST_NUDGE_KEY, now.toString());
+              setTimeout(() => {
+                if (!cancelled) setLowBalanceModalVisible(true);
+              }, 800);
+            }
+          }
+        } catch (e) {}
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [coins])
+  );
 
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
@@ -96,6 +127,27 @@ export default function UserProfileTab() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (e) {}
     toggleTheme();
+  };
+
+  const handleOpenPlayStore = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+    const pkg = 'com.amitnarwal.dreamdate';
+    const marketUrl = `market://details?id=${pkg}`;
+    const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
+    try {
+      const supported = await Linking.canOpenURL(marketUrl);
+      if (supported) {
+        await Linking.openURL(marketUrl);
+      } else {
+        await Linking.openURL(webUrl);
+      }
+    } catch (e) {
+      try {
+        await Linking.openURL(webUrl);
+      } catch {}
+    }
   };
 
   return (
@@ -126,192 +178,276 @@ export default function UserProfileTab() {
                 gap: 20,
               }}
             >
-              {/* Hero Identity Presentation (Quiet Luxury Dribbble Style) */}
+              {/* Hero Identity Presentation — VIP: golden gradient with lights */}
+              {isVip ? (
+                <LinearGradient
+                  colors={['#8C5A12', '#C28A1E', '#5C3A0A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroCard}
+                >
+                  {/* Decorative light orbs */}
+                  <View style={styles.heroOrbA} pointerEvents="none" />
+                  <View style={styles.heroOrbB} pointerEvents="none" />
+                  <View style={styles.heroOrbC} pointerEvents="none" />
+
+                  {/* Top Row: Avatar & Identity */}
+                  <View style={styles.heroIdentityRow}>
+                    <View style={styles.avatarWrap}>
+                      {user?.avatar ? (
+                        <Image source={{ uri: user.avatar }} style={styles.avatarCircle} />
+                      ) : (
+                        <View
+                          style={[
+                            styles.avatarCircle,
+                            {
+                              backgroundColor: 'rgba(255, 215, 0, 0.22)',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.avatarMonogram, { color: '#FFE7A0' }]}>
+                            {user?.name
+                              ? user.name
+                                  .split(' ')
+                                  .map((w) => w[0])
+                                  .join('')
+                                  .slice(0, 2)
+                                  .toUpperCase()
+                              : 'AM'}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.verifiedDot}>
+                        <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
+                      </View>
+                    </View>
+
+                    <View style={styles.heroTextCol}>
+                      <View style={styles.heroNameRow}>
+                        <Text style={[styles.heroName, { color: '#FFF4CC' }]}>
+                          {user?.name || 'Alex Morgan'}
+                        </Text>
+                        <View style={styles.vipPillBadgeGold}>
+                          <Text style={styles.vipPillBadgeGoldText}>VIP ELITE</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.heroHandle, { color: 'rgba(255, 244, 204, 0.75)' }]}>
+                        {user?.email ? `${user.email} · ID DD-782910` : '@alex · ID DD-782910'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Subtle Divider (gold tint) */}
+                  <View
+                    style={[
+                      styles.cardInnerDivider,
+                      { backgroundColor: 'rgba(255, 215, 0, 0.18)' },
+                    ]}
+                  />
+
+                  {/* Editorial Stats Row */}
+                  <View style={styles.statsRow}>
+                    <View style={styles.statCol}>
+                      <Text style={[styles.statValue, { color: '#FFF4CC' }]}>12</Text>
+                      <Text style={[styles.statLabel, { color: 'rgba(255, 244, 204, 0.70)' }]}>
+                        Matches
+                      </Text>
+                    </View>
+
+                    <View style={[styles.statDivider, { backgroundColor: 'rgba(255, 215, 0, 0.25)' }]} />
+
+                    <View style={styles.statCol}>
+                      <Text style={[styles.statValue, { color: '#FFF4CC' }]}>48</Text>
+                      <Text style={[styles.statLabel, { color: 'rgba(255, 244, 204, 0.70)' }]}>
+                        Calls
+                      </Text>
+                    </View>
+
+                    <View style={[styles.statDivider, { backgroundColor: 'rgba(255, 215, 0, 0.25)' }]} />
+
+                    <View style={styles.statCol}>
+                      <Text style={[styles.statValue, { color: '#FFD700' }]}>98%</Text>
+                      <Text style={[styles.statLabel, { color: 'rgba(255, 244, 204, 0.70)' }]}>
+                        Rating
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              ) : (
               <View
                 style={[
                   styles.heroCard,
                   {
                     backgroundColor: theme.colors.surface,
-                    borderColor: isDark
-                      ? 'rgba(255, 255, 255, 0.06)'
-                      : 'rgba(0, 0, 0, 0.06)',
                   },
                 ]}
               >
-            {/* Top Row: Avatar & Identity */}
-            <View style={styles.heroIdentityRow}>
-              <View style={styles.avatarWrap}>
-                {user?.avatar ? (
-                  <Image source={{ uri: user.avatar }} style={styles.avatarCircle} />
-                ) : (
-                  <View
-                    style={[
-                      styles.avatarCircle,
-                      {
-                        backgroundColor: isDark
-                          ? 'rgba(246, 85, 146, 0.16)'
-                          : 'rgba(246, 85, 146, 0.12)',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.avatarMonogram}>
-                      {user?.name
-                        ? user.name
-                            .split(' ')
-                            .map((w) => w[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()
-                        : 'AM'}
+                <View style={styles.heroIdentityRow}>
+                  <View style={styles.avatarWrap}>
+                    {user?.avatar ? (
+                      <Image source={{ uri: user.avatar }} style={styles.avatarCircle} />
+                    ) : (
+                      <View
+                        style={[
+                          styles.avatarCircle,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(246, 85, 146, 0.16)'
+                              : 'rgba(246, 85, 146, 0.12)',
+                          },
+                        ]}
+                      >
+                        <Text style={styles.avatarMonogram}>
+                          {user?.name
+                            ? user.name
+                                .split(' ')
+                                .map((w) => w[0])
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase()
+                            : 'AM'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.verifiedDot}>
+                      <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
+                    </View>
+                  </View>
+
+                  <View style={styles.heroTextCol}>
+                    <View style={styles.heroNameRow}>
+                      <Text
+                        style={[
+                          styles.heroName,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
+                        {user?.name || 'Alex Morgan'}
+                      </Text>
+                      <View style={styles.vipPillBadge}>
+                        <Text style={styles.vipPillBadgeText}>VIP ELITE</Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.heroHandle,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      {user?.email ? `${user.email} · ID DD-782910` : '@alex · ID DD-782910'}
                     </Text>
                   </View>
-                )}
-                <View style={styles.verifiedDot}>
-                  <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
                 </View>
-              </View>
 
-              <View style={styles.heroTextCol}>
-                <View style={styles.heroNameRow}>
-                  <Text
+                <View
+                  style={[
+                    styles.cardInnerDivider,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.05)',
+                    },
+                  ]}
+                />
+
+                <View style={styles.statsRow}>
+                  <View style={styles.statCol}>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      12
+                    </Text>
+                    <Text
+                      style={[
+                        styles.statLabel,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Matches
+                    </Text>
+                  </View>
+
+                  <View
                     style={[
-                      styles.heroName,
-                      { color: theme.colors.onSurface },
+                      styles.statDivider,
+                      {
+                        backgroundColor: isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : 'rgba(0, 0, 0, 0.08)',
+                      },
                     ]}
-                  >
-                    {user?.name || 'Alex Morgan'}
-                  </Text>
-                  <View style={styles.vipPillBadge}>
-                    <Text style={styles.vipPillBadgeText}>VIP ELITE</Text>
+                  />
+
+                  <View style={styles.statCol}>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      48
+                    </Text>
+                    <Text
+                      style={[
+                        styles.statLabel,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Calls
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.statDivider,
+                      {
+                        backgroundColor: isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : 'rgba(0, 0, 0, 0.08)',
+                      },
+                    ]}
+                  />
+
+                  <View style={styles.statCol}>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: '#F65592' },
+                      ]}
+                    >
+                      98%
+                    </Text>
+                    <Text
+                      style={[
+                        styles.statLabel,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Rating
+                    </Text>
                   </View>
                 </View>
-                <Text
-                  style={[
-                    styles.heroHandle,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  {user?.email ? `${user.email} · ID DD-782910` : '@alex · ID DD-782910'}
-                </Text>
               </View>
-            </View>
+              )}
 
-            {/* Subtle Divider */}
-            <View
-              style={[
-                styles.cardInnerDivider,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255, 255, 255, 0.05)'
-                    : 'rgba(0, 0, 0, 0.05)',
-                },
-              ]}
-            />
-
-            {/* Editorial Stats Row */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text
-                  style={[
-                    styles.statValue,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  12
-                </Text>
-                <Text
-                  style={[
-                    styles.statLabel,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  Matches
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.statDivider,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : 'rgba(0, 0, 0, 0.08)',
-                  },
-                ]}
-              />
-
-              <View style={styles.statCol}>
-                <Text
-                  style={[
-                    styles.statValue,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  48
-                </Text>
-                <Text
-                  style={[
-                    styles.statLabel,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  Calls
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.statDivider,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : 'rgba(0, 0, 0, 0.08)',
-                  },
-                ]}
-              />
-
-              <View style={styles.statCol}>
-                <Text
-                  style={[
-                    styles.statValue,
-                    { color: '#F65592' },
-                  ]}
-                >
-                  98%
-                </Text>
-                <Text
-                  style={[
-                    styles.statLabel,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  Rating
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Luxury Card: Wallet / Balance Tile */}
-          <View
-            style={[
-              styles.walletCard,
-              {
-                backgroundColor: isDark ? '#191B1D' : '#FFFFFF',
-                borderColor: isDark
-                  ? 'rgba(255, 255, 255, 0.06)'
-                  : 'rgba(0, 0, 0, 0.06)',
-              },
-            ]}
+          {/* Luxury Card: Wallet / Balance Tile — gradient */}
+          <LinearGradient
+            colors={['#F65592', '#E11D48', '#BE185D']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.walletCard}
           >
+            {/* Subtle decorative light orbs */}
+            <View style={styles.walletOrbA} pointerEvents="none" />
+            <View style={styles.walletOrbB} pointerEvents="none" />
+
             <View style={styles.walletHeaderRow}>
               <View style={styles.walletTagRow}>
-                <CoinIcon size={14} color="#FFD700" />
-                <Text
-                  style={[
-                    styles.walletCardTag,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
+                <CoinIcon size={14} color="#FFFFFF" />
+                <Text style={[styles.walletCardTag, { color: 'rgba(255, 255, 255, 0.85)' }]}>
                   DREAMDATE COIN BALANCE
                 </Text>
               </View>
@@ -320,22 +456,10 @@ export default function UserProfileTab() {
             <View style={styles.walletMainRow}>
               <View style={styles.balanceCol}>
                 <View style={styles.balanceNumberRow}>
-                  <Text
-                    style={[
-                      styles.balanceAmount,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
+                  <Text style={[styles.balanceAmount, { color: '#FFFFFF' }]}>
                     {coins.toLocaleString()}
                   </Text>
-                  <Text
-                    style={[
-                      styles.balanceUnit,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Coins
-                  </Text>
+                  <Text style={[styles.balanceUnit, { color: 'rgba(255, 255, 255, 0.80)' }]}>Coins</Text>
                 </View>
               </View>
 
@@ -344,11 +468,11 @@ export default function UserProfileTab() {
                 onPress={() => setRechargeVisible(true)}
                 activeOpacity={0.85}
               >
-                <Ionicons name="add" size={16} color="#FFFFFF" />
+                <Ionicons name="add" size={16} color="#F65592" />
                 <Text style={styles.rechargeBtnText}>Recharge</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
 
           {/* Section: Settings & Extras */}
           <View style={styles.sectionWrap}>
@@ -366,9 +490,6 @@ export default function UserProfileTab() {
                 styles.menuGroupCard,
                 {
                   backgroundColor: theme.colors.surface,
-                  borderColor: isDark
-                    ? 'rgba(255, 255, 255, 0.06)'
-                    : 'rgba(0, 0, 0, 0.06)',
                 },
               ]}
             >
@@ -543,16 +664,13 @@ export default function UserProfileTab() {
                 styles.menuGroupCard,
                 {
                   backgroundColor: theme.colors.surface,
-                  borderColor: isDark
-                    ? 'rgba(255, 255, 255, 0.06)'
-                    : 'rgba(0, 0, 0, 0.06)',
                 },
               ]}
             >
               {/* Rate App */}
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => setRateModalVisible(true)}
+                onPress={handleOpenPlayStore}
                 activeOpacity={0.75}
               >
                 <View
@@ -720,9 +838,6 @@ export default function UserProfileTab() {
               styles.signOutButton,
               {
                 backgroundColor: theme.colors.surface,
-                borderColor: isDark
-                  ? 'rgba(255, 255, 255, 0.06)'
-                  : 'rgba(0, 0, 0, 0.06)',
               },
             ]}
             onPress={() => setLogoutModalVisible(true)}
@@ -788,56 +903,24 @@ export default function UserProfileTab() {
         }}
       />
 
-      {/* Rate Us Modal */}
+      {/* Low-balance nudge (auto, max 1×/day) */}
       <AppModal
-        visible={rateModalVisible}
-        onClose={() => setRateModalVisible(false)}
-        title="Rate Experience"
-        description="Tap a star to rate your companion connection quality."
-        icon="star-outline"
-        iconColor="#F65592"
+        visible={lowBalanceModalVisible}
+        onClose={() => setLowBalanceModalVisible(false)}
+        title={`Only ${coins} coins left`}
+        description="Recharge now to keep chatting & calling with your companions."
+        icon="wallet"
+        iconColor="#FFD700"
         primaryAction={{
-          label: 'Submit Rating',
-          onPress: handleRateSubmit,
+          label: 'Recharge Coins',
+          onPress: () => {
+            setLowBalanceModalVisible(false);
+            setRechargeVisible(true);
+          },
         }}
         secondaryAction={{
-          label: 'Cancel',
-          onPress: () => setRateModalVisible(false),
-        }}
-      >
-        <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <TouchableOpacity
-              key={star}
-              onPress={() => {
-                setUserRating(star);
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                } catch (e) {}
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={star <= userRating ? 'star' : 'star-outline'}
-                size={34}
-                color="#F65592"
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </AppModal>
-
-      {/* Rating Thank You Modal */}
-      <AppModal
-        visible={rateThanksVisible}
-        onClose={() => setRateThanksVisible(false)}
-        title="Thank You"
-        description={`You rated DreamDate ${userRating} stars! Your feedback helps us make every connection magical.`}
-        icon="star"
-        iconColor="#F65592"
-        primaryAction={{
-          label: 'Close',
-          onPress: () => setRateThanksVisible(false),
+          label: 'Later',
+          onPress: () => setLowBalanceModalVisible(false),
         }}
       />
 
@@ -875,9 +958,36 @@ const styles = StyleSheet.create({
 
   // Hero Card
   heroCard: {
-    borderRadius: 26,
+    borderRadius: 28,
     padding: 22,
-    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  heroOrbA: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255, 215, 0, 0.22)',
+    top: -50,
+    right: -30,
+  },
+  heroOrbB: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 235, 150, 0.18)',
+    bottom: -20,
+    left: 20,
+  },
+  heroOrbC: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    top: 60,
+    right: 80,
   },
   heroIdentityRow: {
     flexDirection: 'row',
@@ -893,8 +1003,6 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(246, 85, 146, 0.4)',
   },
   avatarMonogram: {
     fontSize: 22,
@@ -935,6 +1043,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  vipPillBadgeGold: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  vipPillBadgeGoldText: {
+    color: '#5C3A0A',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   heroHandle: {
     fontSize: 13,
     fontWeight: '500',
@@ -970,9 +1090,27 @@ const styles = StyleSheet.create({
 
   // Wallet Card
   walletCard: {
-    borderRadius: 24,
+    borderRadius: 26,
     padding: 20,
-    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  walletOrbA: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    top: -60,
+    right: -40,
+  },
+  walletOrbB: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    bottom: -30,
+    left: -20,
   },
   walletHeaderRow: {
     marginBottom: 12,
@@ -1036,8 +1174,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   menuGroupCard: {
-    borderRadius: 24,
-    borderWidth: 1,
+    borderRadius: 26,
     overflow: 'hidden',
   },
   menuItem: {
@@ -1083,13 +1220,12 @@ const styles = StyleSheet.create({
 
   // Sign Out
   signOutButton: {
-    borderRadius: 20,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
-    borderWidth: 1,
     marginTop: 6,
   },
   signOutText: {
@@ -1104,13 +1240,6 @@ const styles = StyleSheet.create({
   },
 
   // Stars in Rate Modal
-  starsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 8,
-  },
-
   // Policy Modal
   modalOverlay: {
     flex: 1,

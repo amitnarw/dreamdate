@@ -25,7 +25,6 @@ import RechargeModal from '../../components/RechargeModal';
 import { StitchTheme } from '../../constants/theme';
 import { useTabBlur } from '../../context/TabBlurContext';
 import { useTheme } from '../../context/ThemeContext';
-import { ARCHETYPE_META } from '../../data/mockProfiles';
 import {
   CallLogItem,
   clearCallLogs,
@@ -273,19 +272,14 @@ export default function MessageCenterHistory() {
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item }) => {
                       const displayTime = formatTimestampRelative(item.timestamp);
-                      const archetypeMeta = ARCHETYPE_META[item.archetype] || ARCHETYPE_META.playful_tease;
                       return (
                         <TouchableOpacity
                           style={[
                             styles.chatRow,
                             {
                               backgroundColor: isDark
-                                ? 'rgba(30, 32, 32, 0.45)'
+                                ? 'rgba(30, 32, 32, 0.55)'
                                 : '#FFFFFF',
-                              borderColor: isDark
-                                ? 'rgba(255, 255, 255, 0.05)'
-                                : 'rgba(0, 0, 0, 0.06)',
-                              borderWidth: 1,
                             },
                           ]}
                           onPress={() => router.push(`/chat/${item.profileId}` as any)}
@@ -293,36 +287,27 @@ export default function MessageCenterHistory() {
                         >
                           {/* Story Ring Avatar + Online Dot */}
                           <View style={styles.avatarWrap}>
-                            <View
-                              style={[
-                                styles.storyRing,
-                                item.unread ? styles.storyRingActive : styles.storyRingInactive,
-                              ]}
-                            >
-                              <Image source={{ uri: item.avatar }} style={styles.avatarImg} />
-                            </View>
+                            {item.unread ? (
+                              <View style={styles.storyRingActive}>
+                                <Image source={{ uri: item.avatar }} style={styles.avatarImg} />
+                              </View>
+                            ) : (
+                              <Image source={{ uri: item.avatar }} style={styles.avatarImgPlain} />
+                            )}
                             <View style={styles.onlineBadgeDot} />
                           </View>
 
-                          {/* Name, Archetype Tag, Time, Preview */}
+                          {/* Name, Time, Preview */}
                           <View style={styles.chatInfo}>
                             <View style={styles.chatHeaderRow}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text
-                                  style={[
-                                    styles.chatName,
-                                    { color: isDark ? '#FFFFFF' : '#191C1D' },
-                                  ]}
-                                >
-                                  {item.name.split(' ')[0]}
-                                </Text>
-                                <View style={[styles.chatArchetypeTag, { backgroundColor: archetypeMeta.badgeColor + '2A' }]}>
-                                  <Text style={styles.chatArchetypeTagEmoji}>{archetypeMeta.emoji}</Text>
-                                  <Text style={[styles.chatArchetypeTagLabel, { color: archetypeMeta.badgeColor }]}>
-                                    {archetypeMeta.label.split(' ')[0]}
-                                  </Text>
-                                </View>
-                              </View>
+                              <Text
+                                style={[
+                                  styles.chatName,
+                                  { color: isDark ? '#FFFFFF' : '#191C1D' },
+                                ]}
+                              >
+                                {item.name.split(' ')[0]}
+                              </Text>
                               <Text
                                 style={[
                                   styles.chatTime,
@@ -400,12 +385,8 @@ export default function MessageCenterHistory() {
                             styles.callRow,
                             {
                               backgroundColor: isDark
-                                ? 'rgba(30, 32, 32, 0.45)'
+                                ? 'rgba(30, 32, 32, 0.55)'
                                 : '#FFFFFF',
-                              borderColor: isDark
-                                ? 'rgba(255, 255, 255, 0.05)'
-                                : 'rgba(0, 0, 0, 0.06)',
-                              borderWidth: 1,
                             },
                           ]}
                           onPress={() => router.push(`/call/${item.profileId}` as any)}
@@ -506,11 +487,6 @@ const styles = StyleSheet.create({
     top: 4,
     bottom: 4,
     borderRadius: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
   },
   tabSegment: {
     flex: 1,
@@ -535,42 +511,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 20,
     gap: 12,
   },
   avatarWrap: {
     position: 'relative',
   },
-  storyRing: {
+  storyRingActive: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    padding: 2,
+    padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  storyRingActive: {
-    borderWidth: 2,
-    borderColor: '#F65592',
-  },
-  storyRingInactive: {
-    borderWidth: 0,
+    backgroundColor: '#F65592',
   },
   avatarImg: {
     width: 44,
     height: 44,
     borderRadius: 22,
   },
+  avatarImgPlain: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
   onlineBadgeDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: 0,
+    right: 0,
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: '#1E2020',
+    borderColor: '#0C0F10',
   },
   chatInfo: {
     flex: 1,
@@ -584,21 +559,6 @@ const styles = StyleSheet.create({
   chatName: {
     fontSize: 16,
     fontWeight: '700',
-  },
-  chatArchetypeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-    gap: 2,
-  },
-  chatArchetypeTagEmoji: {
-    fontSize: 9,
-  },
-  chatArchetypeTagLabel: {
-    fontSize: 9,
-    fontWeight: '800',
   },
   chatTime: {
     fontSize: 12,
@@ -616,13 +576,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 20,
     gap: 12,
   },
   callAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   callInfo: {
     flex: 1,
@@ -650,11 +610,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F65592',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
   emptyContainer: {
     flex: 1,
@@ -692,11 +647,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 22,
     gap: 8,
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
   },
   emptyCTAText: {
     color: '#FFFFFF',

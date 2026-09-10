@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -31,7 +31,16 @@ import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
 import { StitchTheme } from '../../constants/theme';
 import { FAKE_CALL_VIDEOS, MOCK_PROFILES, Profile, VIRTUAL_GIFTS, findGiftVisual } from '../../data/mockProfiles';
+import {
+  generatePostCallFollowUp,
+  saveChatHistory,
+  ChatMessage,
+} from '../../services/chatEngine';
 import { saveCallLog } from '../../services/callHistoryService';
+import {
+  markCallFunnelFired,
+  schedulePostDepletionReminder,
+} from '../../services/engagementService';
 import { deductCoins, useWallet } from '../../services/wallet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -118,6 +127,8 @@ export default function VideoCallScreen() {
         setKeyboardHeight(0);
       }
     );
+    // Mark missed-call funnel as fired once user enters a call screen
+    markCallFunnelFired().catch(() => {});
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -125,6 +136,8 @@ export default function VideoCallScreen() {
   }, []);
 
   const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+  const [reconnecting, setReconnecting] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const sonar1 = useRef(new Animated.Value(0)).current;
   const sonar2 = useRef(new Animated.Value(0)).current;
@@ -138,6 +151,8 @@ export default function VideoCallScreen() {
   const giftExitAnim = useRef(new Animated.Value(1)).current;   // 1 (visible) -> 0 (fade exit)
   const comboCountRef = useRef(1);
   const celebrationTimerRef = useRef<any>(null);
+  const glitchTimerRef = useRef<any>(null);
+  const followUpTimerRef = useRef<any>(null);
 
   // Video player setup (loops indefinitely for fake video call)
   const selectedVideoUrl = profile.videoUrl || FAKE_CALL_VIDEOS[0];
@@ -146,12 +161,15 @@ export default function VideoCallScreen() {
     p.muted = false;
   });
 
-  // Camera permissions
+  // Camera + microphone permissions
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
     }
-  }, [permission]);
+    if (!micPermission?.granted) {
+      requestMicPermission();
+    }
+  }, [permission, micPermission]);
 
   // Ringing phase logic with Radar Sonar Waves & Encrypted Stream setup
   useEffect(() => {
@@ -205,13 +223,30 @@ export default function VideoCallScreen() {
       s2Anim.start();
       s3Anim.start();
 
+      // Variable ring duration 1.8–4.0s — feels less robotic than fixed 2.6s
+      const ringMs = 1800 + Math.floor(Math.random() * 2200);
       timer = setTimeout(() => {
         setCallState('connected');
         try {
           player.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (e) {}
-      }, 2600);
+
+        // One random brief "reconnecting" glitch ~45–75s into the call
+        const glitchAt = 45_000 + Math.floor(Math.random() * 30_000);
+        glitchTimerRef.current = setTimeout(() => {
+          try {
+            player.pause();
+          } catch (e) {}
+          setReconnecting(true);
+          setTimeout(() => {
+            try {
+              player.play();
+            } catch (e) {}
+            setReconnecting(false);
+          }, 850);
+        }, glitchAt);
+      }, ringMs);
     }
     return () => {
       clearTimeout(timer);
@@ -228,20 +263,31 @@ export default function VideoCallScreen() {
       interval = setInterval(async () => {
         setCallSeconds((prev) => {
           const next = prev + 1;
-          if (next > 0 && next % 60 === 0) {
+          // First 2 minutes (FREE_WINDOW_SECONDS) = no coin deduction
+          const FREE_WINDOW_SECONDS = 120;
+          if (next > 0 && next % 60 === 0 && next > FREE_WINDOW_SECONDS) {
             deductCoins(profile.callRate).then((success) => {
               if (!success) {
                 handleEndCall();
                 setCoinsDepletedModalVisible(true);
+                schedulePostDepletionReminder(profile.name).catch(() => {});
               }
             });
           }
           return next;
         });
       }, 1000);
+
+      // Cleanup glitch + follow-up timers when leaving connected
+      if (glitchTimerRef.current) clearTimeout(glitchTimerRef.current);
+      if (followUpTimerRef.current) clearTimeout(followUpTimerRef.current);
     }
-    return () => clearInterval(interval);
-  }, [callState, profile.callRate]);
+    return () => {
+      clearInterval(interval);
+      if (glitchTimerRef.current) clearTimeout(glitchTimerRef.current);
+      if (followUpTimerRef.current) clearTimeout(followUpTimerRef.current);
+    };
+  }, [callState, profile.callRate, profile.name]);
 
   const handleEndCall = () => {
     try {
@@ -260,6 +306,30 @@ export default function VideoCallScreen() {
       durationSeconds: callSeconds,
       coinsSpent: coinsSpent,
     });
+
+    // Schedule post-call follow-up message (1–3 min after end)
+    if (callSeconds >= 30) {
+      const followUpDelay = (60 + Math.floor(Math.random() * 120)) * 1000;
+      followUpTimerRef.current = setTimeout(async () => {
+        try {
+          const text = generatePostCallFollowUp(profile, callSeconds);
+          const newMsg: ChatMessage = {
+            id: 'msg-followup-' + Date.now(),
+            sender: 'profile',
+            text,
+            timestamp: Date.now(),
+            status: 'delivered',
+          };
+          // Read existing history (or empty)
+          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+          const key = '@dreamdate_chat_history_v5_' + profile.id;
+          const raw = await AsyncStorage.getItem(key);
+          const history: ChatMessage[] = raw ? JSON.parse(raw) : [];
+          history.push(newMsg);
+          await saveChatHistory(profile.id, history);
+        } catch (e) {}
+      }, followUpDelay);
+    }
   };
 
   const handleGiftSent = (gift: any) => {
@@ -590,9 +660,7 @@ export default function VideoCallScreen() {
               style={[
                 styles.summaryCard,
                 {
-                  backgroundColor: isDark ? 'rgba(30, 32, 32, 0.70)' : '#FFFFFF',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                  borderWidth: 1,
+                  backgroundColor: isDark ? 'rgba(30, 32, 32, 0.85)' : '#FFFFFF',
                 },
               ]}
             >
@@ -640,8 +708,6 @@ export default function VideoCallScreen() {
                   styles.doneBtn,
                   {
                     backgroundColor: isDark ? '#2D3030' : '#F1F3F5',
-                    borderColor: isDark ? 'transparent' : 'rgba(0, 0, 0, 0.06)',
-                    borderWidth: isDark ? 0 : 1,
                   },
                 ]}
                 onPress={() => router.back()}
@@ -857,6 +923,21 @@ export default function VideoCallScreen() {
             )}
           </View>
         </View>
+
+        {/* Brief "Reconnecting" glitch overlay */}
+        {reconnecting && (
+          <View style={styles.reconnectingOverlay} pointerEvents="none">
+            <Ionicons name="cloud-offline" size={22} color="#FFD700" />
+            <Text style={styles.reconnectingText}>Reconnecting…</Text>
+          </View>
+        )}
+
+        {/* Free preview badge — first 2 minutes */}
+        {callSeconds > 0 && callSeconds <= 120 && (
+          <View style={styles.freeBadge} pointerEvents="none">
+            <Text style={styles.freeBadgeText}>FREE</Text>
+          </View>
+        )}
       </SafeAreaView>
 
       {/* Bottom Controls & Chat Bar with Safe Keyboard Avoidance Gap */}
@@ -1318,9 +1399,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: 'rgba(30, 32, 32, 0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(30, 32, 32, 0.65)',
   },
   stitchSelfCamera: {
     width: '100%',
@@ -1336,6 +1415,44 @@ const styles = StyleSheet.create({
     color: '#dfbec6',
     fontSize: 11,
     marginTop: 4,
+  },
+  reconnectingOverlay: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 16,
+    marginHorizontal: 'auto',
+    width: 180,
+  },
+  reconnectingText: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  freeBadge: {
+    position: 'absolute',
+    top: '45%',
+    left: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+  },
+  freeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
 
   // Live Gift Celebration Showcase Overlay
@@ -1508,10 +1625,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emojiPickerBar: {
-    borderRadius: 24,
+    borderRadius: 26,
     backgroundColor: 'rgba(28, 18, 22, 0.88)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
     overflow: 'hidden',
     paddingVertical: 8,
     paddingLeft: 6,
@@ -1680,10 +1795,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#93000a',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF2A6D',
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 8,
   },
   cancelCallText: {
     color: '#dfbec6',
@@ -1876,16 +1987,12 @@ const styles = StyleSheet.create({
   compactThumbBtn: {
     width: 50,
     height: 50,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 2,
   },
-  compactThumbActive: {
-    borderColor: '#F65592',
-  },
+  compactThumbActive: {},
   compactThumbInactive: {
-    borderColor: 'transparent',
-    opacity: 0.65,
+    opacity: 0.5,
   },
   compactThumbImg: {
     width: '100%',

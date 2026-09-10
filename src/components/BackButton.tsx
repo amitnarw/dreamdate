@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleProp, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
 import AppBlurView from './AppBlurView';
 import { useTheme } from '../context/ThemeContext';
 
@@ -44,39 +44,42 @@ export default function BackButton({
   const effectiveIconColor = iconColor || (isDark ? '#FFFFFF' : '#191C1D');
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      style={[
-        styles.wrap,
-        {
-          borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-          borderWidth: 1,
-        },
-        style,
-      ]}
-      activeOpacity={0.8}
-      accessibilityLabel="Back"
-    >
-      <AppBlurView
-        style={[
-          styles.circleBtn,
-          {
-            backgroundColor: isDark
-              ? 'rgba(28, 18, 22, 0.50)'
-              : 'rgba(255, 255, 255, 0.85)',
-          },
-        ]}
-        tint={isDark ? 'dark' : 'light'}
+    <View style={[styles.shadowWrap, style]}>
+      <TouchableOpacity
+        onPress={handlePress}
+        style={styles.wrap}
+        activeOpacity={0.8}
+        accessibilityLabel="Back"
       >
-        <Ionicons name="chevron-back" size={size} color={effectiveIconColor} />
-      </AppBlurView>
-    </TouchableOpacity>
+        <AppBlurView
+          style={[
+            styles.circleBtn,
+            {
+              backgroundColor: isDark
+                ? 'rgba(28, 18, 22, 0.50)'
+                : 'rgba(255, 255, 255, 0.85)',
+            },
+          ]}
+          tint={isDark ? 'dark' : 'light'}
+        >
+          <Ionicons name="chevron-back" size={size} color={effectiveIconColor} />
+        </AppBlurView>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shadowWrap: {
+    borderRadius: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   wrap: {
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: 'hidden',
   },
   circleBtn: {

@@ -99,7 +99,6 @@ export default function PaymentSelectorSheet({
               styles.sheetContainer,
               {
                 backgroundColor: isDark ? '#141416' : '#FFFFFF',
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
               },
             ]}
           >
@@ -134,7 +133,6 @@ export default function PaymentSelectorSheet({
                 styles.summaryCard,
                 {
                   backgroundColor: isDark ? 'rgba(246, 85, 146, 0.10)' : 'rgba(246, 85, 146, 0.06)',
-                  borderColor: isDark ? 'rgba(246, 85, 146, 0.25)' : 'rgba(246, 85, 146, 0.20)',
                 },
               ]}
             >
@@ -172,15 +170,15 @@ export default function PaymentSelectorSheet({
               <TouchableOpacity
                 style={[
                   styles.methodCard,
-                  selectedMethod === 'upi' && styles.methodCardSelected,
                   {
-                    backgroundColor: isDark ? '#1C1E22' : '#F9FAFB',
-                    borderColor:
+                    backgroundColor:
                       selectedMethod === 'upi'
-                        ? '#F65592'
+                        ? isDark
+                          ? 'rgba(246, 85, 146, 0.18)'
+                          : 'rgba(246, 85, 146, 0.10)'
                         : isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : 'rgba(0,0,0,0.06)',
+                        ? '#1C1E22'
+                        : '#F9FAFB',
                   },
                 ]}
                 onPress={() => setSelectedMethod('upi')}
@@ -205,7 +203,14 @@ export default function PaymentSelectorSheet({
                 <View
                   style={[
                     styles.radioCircle,
-                    selectedMethod === 'upi' && styles.radioCircleSelected,
+                    selectedMethod === 'upi'
+                      ? styles.radioCircleSelected
+                      : {
+                          borderWidth: 2,
+                          borderColor: isDark
+                            ? 'rgba(255,255,255,0.20)'
+                            : 'rgba(0,0,0,0.18)',
+                        },
                   ]}
                 >
                   {selectedMethod === 'upi' && <View style={styles.radioInner} />}
@@ -216,15 +221,15 @@ export default function PaymentSelectorSheet({
               <TouchableOpacity
                 style={[
                   styles.methodCard,
-                  selectedMethod === 'google_play' && styles.methodCardSelected,
                   {
-                    backgroundColor: isDark ? '#1C1E22' : '#F9FAFB',
-                    borderColor:
+                    backgroundColor:
                       selectedMethod === 'google_play'
-                        ? '#F65592'
+                        ? isDark
+                          ? 'rgba(246, 85, 146, 0.18)'
+                          : 'rgba(246, 85, 146, 0.10)'
                         : isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : 'rgba(0,0,0,0.06)',
+                        ? '#1C1E22'
+                        : '#F9FAFB',
                   },
                 ]}
                 onPress={() => setSelectedMethod('google_play')}
@@ -244,7 +249,14 @@ export default function PaymentSelectorSheet({
                 <View
                   style={[
                     styles.radioCircle,
-                    selectedMethod === 'google_play' && styles.radioCircleSelected,
+                    selectedMethod === 'google_play'
+                      ? styles.radioCircleSelected
+                      : {
+                          borderWidth: 2,
+                          borderColor: isDark
+                            ? 'rgba(255,255,255,0.20)'
+                            : 'rgba(0,0,0,0.18)',
+                        },
                   ]}
                 >
                   {selectedMethod === 'google_play' && <View style={styles.radioInner} />}
@@ -312,7 +324,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingBottom: 28,
-    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
   handleWrap: {
     alignItems: 'center',
@@ -352,7 +368,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderRadius: 18,
-    borderWidth: 1,
     marginBottom: 16,
   },
   summaryLeft: {
@@ -412,13 +427,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: 18,
     gap: 12,
   },
-  methodCardSelected: {
-    borderColor: '#F65592',
-  },
+  methodCardSelected: {},
   methodIconWrapUpi: {
     width: 40,
     height: 40,
@@ -463,22 +475,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#6B7280',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  radioCircleIdle: {},
   radioCircleSelected: {
-    borderColor: '#F65592',
+    backgroundColor: '#F65592',
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F65592',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
   securityRow: {
     flexDirection: 'row',
@@ -498,11 +509,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F65592',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
   },
   payBtnInner: {
     flexDirection: 'row',

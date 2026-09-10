@@ -182,7 +182,9 @@ export const DaylightEleganceTheme = {
 export type AppTheme = typeof MidnightEleganceTheme;
 export const StitchTheme = MidnightEleganceTheme;
 
-// Reusable Common Style Presets for 100% Design System Fidelity
+// Reusable Common Style Presets — Borderless Tonal Design Language
+// Depth comes from tonal layering + soft shadows, not strokes.
+// Selection: solid primary fill (small controls) or tinted fill (large cards).
 export const CommonMidnightStyles = {
   screen: {
     flex: 1,
@@ -232,6 +234,28 @@ export const CommonMidnightStyles = {
     height: 8,
     borderRadius: 4,
     backgroundColor: MidnightEleganceTheme.colors.liveGreen,
+  },
+};
+
+// Borderless card presets — tonal surface layering only, no shadows
+export const CommonDaylightStyles = {
+  cardBorderlessDark: {
+    backgroundColor: MidnightEleganceTheme.colors.surfaceContainer,
+    borderRadius: 22,
+  },
+  cardBorderlessLight: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+  },
+  // Selection fills
+  selectedSolid: {
+    backgroundColor: MidnightEleganceTheme.colors.primaryContainer,
+  },
+  selectedTintDark: {
+    backgroundColor: 'rgba(246, 85, 146, 0.18)',
+  },
+  selectedTintLight: {
+    backgroundColor: 'rgba(246, 85, 146, 0.10)',
   },
 };
 

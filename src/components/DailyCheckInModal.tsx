@@ -41,8 +41,8 @@ const CHECKIN_REWARDS: DayReward[] = [
   { day: 7, coins: 500, label: 'Day 7', isCoinReward: false, iconName: 'gift' },
 ];
 
-const STORAGE_DAY_KEY = '@dreamdate_checkin_current_day';
-const STORAGE_DATE_KEY = '@dreamdate_last_checkin_timestamp';
+const STORAGE_DAY_KEY = '@dreamdate_checkin_current_day_v2';
+const STORAGE_DATE_KEY = '@dreamdate_last_checkin_timestamp_v2';
 
 export default function DailyCheckInModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
@@ -187,9 +187,7 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
             {/* 7 Days Rewards Grid */}
             <View style={styles.daysGrid}>
               {CHECKIN_REWARDS.slice(0, 6).map((reward, index) => {
-                const isClaimed = alreadyClaimedToday
-                  ? index <= currentDayIndex
-                  : index < currentDayIndex;
+                const isClaimed = index < currentDayIndex;
                 const isToday = index === currentDayIndex && !alreadyClaimedToday;
 
                 return (
@@ -376,7 +374,6 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
                     backgroundColor: isDark
                       ? 'rgba(239, 68, 68, 0.16)'
                       : 'rgba(239, 68, 68, 0.08)',
-                    borderColor: 'rgba(239, 68, 68, 0.35)',
                   },
                 ]}
               >
@@ -658,7 +655,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -696,9 +692,8 @@ const styles = StyleSheet.create({
   lockedMemberCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 12,
-    borderWidth: 1,
     gap: 10,
     marginBottom: 14,
   },

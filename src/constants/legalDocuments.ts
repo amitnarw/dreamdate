@@ -102,7 +102,8 @@ At DreamDate ("we", "our", or "us"), your personal privacy and discretion are pa
 
 5. PERMISSIONS & DEVICE ACCESS
 5.1. Minimal Permissions: The Application requests only essential system permissions needed to render user interface elements and playback local audio/video media.
-5.2. No Camera or Microphone Transmission: During simulated calls, pre-recorded media is rendered locally. The app does not record, stream, or broadcast your camera feed or voice to any third party or remote server.
+5.2. Camera & Microphone (Local-Only Self-Preview): During the simulated video-call experience, the Application requests access to your device camera and microphone solely to render a live, local self-preview overlay of yourself next to the pre-recorded simulation video of the virtual companion. This camera and microphone feed is processed entirely on-device and is NEVER recorded, stored, streamed, transmitted, or shared with any server, third party, other user, or the virtual companion. Pre-recorded simulation media is always rendered locally — no live video or audio is exchanged with another human.
+5.3. Notifications (Local-Only): The Application requests notification permission solely to deliver local, on-device reminders such as new simulated chat messages, missed simulated video calls, and promotional offers. No push notifications are delivered from any remote server; all notifications are scheduled and triggered from this device only and can be disabled at any time in your device's System Settings.
 
 6. AGE VERIFICATION & MINORS POLICY
 Our Application is strictly prohibited for individuals under the age of 18. We do not knowingly solicit or collect any data from minors. If you believe a minor has gained access to this application on their device, you can completely purge the app by uninstalling it.

@@ -89,11 +89,11 @@ export default function AppHeader({
                 styles.coinPillWrap,
                 {
                   backgroundColor: isDark
-                    ? 'rgba(28, 18, 22, 0.65)'
-                    : 'rgba(255, 255, 255, 0.75)',
+                    ? 'rgba(28, 18, 22, 0.70)'
+                    : 'rgba(255, 255, 255, 0.85)',
                   borderColor: isDark
-                    ? 'rgba(246, 85, 146, 0.25)'
-                    : 'rgba(246, 85, 146, 0.20)',
+                    ? 'rgba(255, 255, 255, 0.14)'
+                    : 'rgba(0, 0, 0, 0.08)',
                 },
               ]}
               onPress={() => setRechargeVisible(true)}
