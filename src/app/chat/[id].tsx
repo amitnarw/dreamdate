@@ -25,7 +25,7 @@ import CoinIcon from '../../components/CoinIcon';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
-import { MOCK_PROFILES, Profile, findGiftVisual } from '../../data/mockProfiles';
+import { ARCHETYPE_META, MOCK_PROFILES, Profile, findGiftVisual } from '../../data/mockProfiles';
 import {
     ChatMessage,
     getChatHistory,
@@ -35,10 +35,10 @@ import {
 import { useWallet } from '../../services/wallet';
 
 const QUICK_PROMPTS = [
-  'Hey beauty!',
-  'You look amazing today',
-  'Can we talk?',
-  'I love your style',
+  'Aap bohot cute ho ✨',
+  'Kya kar rahi ho abhi? 💭',
+  'Photo dikhao na apni 📸',
+  'Video call pe aao na! 🎥',
 ];
 
 export default function PremiumChatScreen() {
@@ -61,7 +61,7 @@ export default function PremiumChatScreen() {
 
   // Load chat history
   useEffect(() => {
-    getChatHistory(profile.id, profile.name).then((history) => {
+    getChatHistory(profile.id, profile.name, profile.archetype).then((history) => {
       setMessages(history);
       scrollToBottom();
     });
@@ -115,25 +115,28 @@ export default function PremiumChatScreen() {
     setInputText('');
     scrollToBottom();
 
-    // Trigger simulated companion response
+    // Trigger simulated companion multi-bubble response
+    const replyData = getSimulatedReply(text, profile);
+    const bubbles = replyData.bubbles && replyData.bubbles.length > 0 ? replyData.bubbles : [replyData.text];
+
     setTimeout(() => {
       setIsTyping(true);
       scrollToBottom();
 
-      const { text: replyText, delayMs } = getSimulatedReply(text, profile.name);
-
       setTimeout(() => {
         setIsTyping(false);
-        const companionMsg: ChatMessage = {
-          id: 'msg-' + Date.now(),
+        const companionMsg1: ChatMessage = {
+          id: 'msg-' + Date.now() + '-1',
           sender: 'profile',
-          text: replyText,
+          text: bubbles[0],
           timestamp: Date.now(),
           status: 'read',
+          type: replyData.photoUrl ? 'photo' : 'text',
+          mediaUrl: replyData.photoUrl,
         };
 
         setMessages((prev) => {
-          const finalMessages = [...prev, companionMsg];
+          const finalMessages = [...prev, companionMsg1];
           saveChatHistory(profile.id, finalMessages);
           return finalMessages;
         });
@@ -142,8 +145,38 @@ export default function PremiumChatScreen() {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (e) {}
-      }, delayMs);
-    }, 600);
+
+        // If there is a second bubble, schedule typing and delivery
+        if (bubbles.length > 1) {
+          setTimeout(() => {
+            setIsTyping(true);
+            scrollToBottom();
+
+            setTimeout(() => {
+              setIsTyping(false);
+              const companionMsg2: ChatMessage = {
+                id: 'msg-' + Date.now() + '-2',
+                sender: 'profile',
+                text: bubbles[1],
+                timestamp: Date.now(),
+                status: 'read',
+              };
+
+              setMessages((prev) => {
+                const finalMessages = [...prev, companionMsg2];
+                saveChatHistory(profile.id, finalMessages);
+                return finalMessages;
+              });
+              scrollToBottom();
+
+              try {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (e) {}
+            }, replyData.additionalDelayMs || 1400);
+          }, 600);
+        }
+      }, replyData.delayMs);
+    }, 500);
   };
 
   const handleGiftSent = (gift: { name: string; icon: string; coins: number; emoji?: string; accentColor?: string }) => {
@@ -225,14 +258,25 @@ export default function PremiumChatScreen() {
               <View style={styles.onlineDot} />
             </View>
             <View>
-              <Text
-                style={[
-                  styles.name,
-                  { color: isDark ? '#FFFFFF' : '#191C1D' },
-                ]}
-              >
-                {profile.name}, {profile.age}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text
+                  style={[
+                    styles.name,
+                    { color: isDark ? '#FFFFFF' : '#191C1D' },
+                  ]}
+                >
+                  {profile.name}, {profile.age}
+                </Text>
+                {(() => {
+                  const meta = ARCHETYPE_META[profile.archetype] || ARCHETYPE_META.playful_tease;
+                  return (
+                    <View style={[styles.chatArchetypePill, { backgroundColor: meta.badgeColor + '2E', borderColor: meta.badgeColor + '70' }]}>
+                      <Text style={styles.chatArchetypeEmoji}>{meta.emoji}</Text>
+                      <Text style={[styles.chatArchetypeLabel, { color: meta.badgeColor }]}>{meta.label.split(' ')[0]}</Text>
+                    </View>
+                  );
+                })()}
+              </View>
               <Text
                 style={[
                   styles.locationText,
@@ -256,25 +300,19 @@ export default function PremiumChatScreen() {
           style={styles.chatArea}
           contentContainerStyle={styles.chatContent}
         >
-          {/* Top Image Gallery Scroll */}
+          {/* Top Image Gallery Scroll (Strictly isolated to this companion) */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.galleryScroll}
           >
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setPreviewImage(profile.avatar)}
-            >
-              <Image source={{ uri: profile.avatar }} style={styles.galleryImage} />
-            </TouchableOpacity>
-            {MOCK_PROFILES.filter((p) => p.id !== profile.id).slice(0, 3).map((other, i) => (
+            {[profile.avatar, ...(profile.photos || [])].filter((v, i, a) => a.indexOf(v) === i).map((imgUri, i) => (
               <TouchableOpacity
                 key={i}
                 activeOpacity={0.85}
-                onPress={() => setPreviewImage(other.avatar)}
+                onPress={() => setPreviewImage(imgUri)}
               >
-                <Image source={{ uri: other.avatar }} style={styles.galleryImage} />
+                <Image source={{ uri: imgUri }} style={styles.galleryImage} />
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -285,6 +323,33 @@ export default function PremiumChatScreen() {
               hour: '2-digit',
               minute: '2-digit',
             });
+
+            if (item.type === 'photo' && item.mediaUrl) {
+              return (
+                <View
+                  key={item.id}
+                  style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}
+                >
+                  {!isMe && <Image source={{ uri: profile.avatar }} style={styles.msgAvatar} />}
+                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, { overflow: 'hidden', padding: 4 }]}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setPreviewImage(item.mediaUrl!)}
+                    >
+                      <Image source={{ uri: item.mediaUrl }} style={{ width: 220, height: 260, borderRadius: 14 }} resizeMode="cover" />
+                    </TouchableOpacity>
+                    {item.text ? (
+                      <Text style={[styles.msgText, { paddingHorizontal: 8, paddingTop: 6, color: isMe ? '#FFF' : (isDark ? '#E2E2E2' : '#191C1D') }]}>
+                        {item.text}
+                      </Text>
+                    ) : null}
+                    <View style={styles.msgFooter}>
+                      <Text style={[styles.timeText, { color: isMe ? 'rgba(255,255,255,0.7)' : (isDark ? 'rgba(241, 224, 228, 0.6)' : '#8E8E93') }]}>{timeStr}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            }
 
             if (item.type === 'gift') {
               const visual = findGiftVisual(item.giftEmoji || item.giftName || item.giftIcon);
@@ -699,6 +764,22 @@ const styles = StyleSheet.create({
     color: '#E2E2E2',
     fontSize: 16,
     fontWeight: '700',
+  },
+  chatArchetypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 3,
+  },
+  chatArchetypeEmoji: {
+    fontSize: 10,
+  },
+  chatArchetypeLabel: {
+    fontSize: 9,
+    fontWeight: '800',
   },
   locationText: {
     color: '#DFBEC6',

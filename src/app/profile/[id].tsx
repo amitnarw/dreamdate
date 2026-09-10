@@ -25,7 +25,7 @@ import BackButton from '../../components/BackButton';
 import GiftModal from '../../components/GiftModal';
 import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
-import { MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
+import { ARCHETYPE_META, MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -40,15 +40,13 @@ export default function UserProfileDetail1to1() {
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Active photo gallery state with native smooth transition
+  // Active photo gallery state isolated strictly to this companion
   const photoList = [
     profile.avatar,
     ...(profile.photos && profile.photos.length > 0
       ? profile.photos
-      : MOCK_PROFILES.filter((p) => p.id !== profile.id)
-        .slice(0, 5)
-        .map((p) => p.avatar)),
-  ];
+      : [profile.coverImage || profile.avatar]),
+  ].filter((v, i, a) => !!v && a.indexOf(v) === i);
   const [selectedPhoto, setSelectedPhoto] = useState(profile.avatar);
 
   // Prefetch gallery photos into memory for instant, buttery smooth switching
@@ -366,9 +364,14 @@ export default function UserProfileDetail1to1() {
                 {/* Name, Age & Location (Categories/Badges removed as requested) */}
                 <View style={styles.metaRow}>
                   <View style={styles.metaInfoLeft}>
-                    <Text style={styles.nameHeading}>
-                      {profile.name}, {profile.age}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={[styles.nameHeading, { flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
+                        {profile.name}
+                      </Text>
+                      <Text style={[styles.nameHeading, { flexShrink: 0 }]}>
+                        , {profile.age}
+                      </Text>
+                    </View>
 
                     <View style={styles.statusLocationLine}>
                       {/* Location */}
@@ -381,6 +384,29 @@ export default function UserProfileDetail1to1() {
                     </View>
                   </View>
                 </View>
+
+                {/* Personality Archetype Pill */}
+                {(() => {
+                  const meta = ARCHETYPE_META[profile.archetype] || ARCHETYPE_META.playful_tease;
+                  return (
+                    <View
+                      style={[
+                        styles.profileArchetypePill,
+                        {
+                          backgroundColor: meta.badgeColor + '2E',
+                          borderColor: meta.badgeColor + '65',
+                        },
+                      ]}
+                    >
+                      <Text style={styles.profileArchetypeEmoji}>{meta.emoji}</Text>
+                      <Text style={styles.profileArchetypeLabel}>{meta.label}</Text>
+                      <Text style={styles.profileArchetypeDot}>•</Text>
+                      <Text style={styles.profileArchetypeVibe} numberOfLines={1}>
+                        {meta.vibe}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Bio Text */}
                 <Text style={styles.bioText} numberOfLines={3}>
@@ -713,6 +739,35 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.92)',
     fontSize: 13,
     fontWeight: '400',
+  },
+  profileArchetypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 5,
+    marginVertical: 4,
+  },
+  profileArchetypeEmoji: {
+    fontSize: 13,
+  },
+  profileArchetypeLabel: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  profileArchetypeDot: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 11,
+  },
+  profileArchetypeVibe: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 11,
+    fontWeight: '500',
+    flexShrink: 1,
   },
   // Bio (text-sm text-white/90 leading-relaxed font-light)
   bioText: {

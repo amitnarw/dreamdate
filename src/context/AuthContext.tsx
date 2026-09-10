@@ -10,13 +10,14 @@ export interface AuthUser {
   email: string;
   avatar: string;
   isGoogleUser: boolean;
+  termsAccepted: boolean;
   joinedAt: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  loginWithGoogle: () => Promise<void>;
+  fastLogin: (acceptTerms: boolean) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -26,7 +27,7 @@ const WELCOME_BONUS_AWARDED_KEY = '@dreamdate_welcome_bonus_v1';
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
-  loginWithGoogle: async () => {},
+  fastLogin: async () => {},
   logout: async () => {},
 });
 
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
 
-  // Load existing session on boot
+  // Load existing local session on boot
   useEffect(() => {
     async function loadStoredUser() {
       try {
@@ -45,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(JSON.parse(stored));
         }
       } catch (e) {
-        console.error('Failed to load user auth session', e);
+        console.error('Failed to load local user auth session', e);
       } finally {
         setIsLoading(false);
       }
@@ -66,32 +67,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, segments]);
 
-  const loginWithGoogle = async () => {
+  const fastLogin = async (acceptTerms: boolean) => {
+    if (!acceptTerms) {
+      throw new Error('You must accept the User Agreement and Privacy Policy to continue.');
+    }
+
     try {
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } catch (e) {}
 
-      // High-resolution Google User Profile
-      const mockGoogleUser: AuthUser = {
-        id: `google_${Date.now()}`,
-        name: 'Alex Vance',
-        email: 'alex.vance@gmail.com',
+      // Fast Anonymous Local Guest Profile (100% Offline, no tracking)
+      const guestId = `guest_${Date.now().toString(36)}`;
+      const localGuestUser: AuthUser = {
+        id: guestId,
+        name: 'Guest User',
+        email: '',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
-        isGoogleUser: true,
+        isGoogleUser: false,
+        termsAccepted: true,
         joinedAt: new Date().toISOString(),
       };
 
-      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(mockGoogleUser));
+      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(localGuestUser));
 
-      // Award 100 Welcome Bonus Coins on first Google sign-in
+      // Award 100 Welcome Bonus Coins on first fast login
       const alreadyAwarded = await AsyncStorage.getItem(WELCOME_BONUS_AWARDED_KEY);
       if (!alreadyAwarded) {
         await addCoins(100);
         await AsyncStorage.setItem(WELCOME_BONUS_AWARDED_KEY, 'true');
       }
 
-      setUser(mockGoogleUser);
+      setUser(localGuestUser);
 
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -99,7 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       router.replace('/(tabs)' as any);
     } catch (error) {
-      console.error('Google Sign-in failed', error);
+      console.error('Fast Login failed', error);
+      throw error;
     }
   };
 
@@ -118,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, fastLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -12,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.amitnarwal.dreamdate",
       "backgroundColor": "#0C0F10",
       "adaptiveIcon": {
         "backgroundColor": "#0C0F10",

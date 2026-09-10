@@ -11,52 +11,47 @@ import {
 } from 'react-native';
 import AppModal from './AppModal';
 import CoinIcon from './CoinIcon';
+import PaymentSelectorSheet from './PaymentSelectorSheet';
 import { useTheme } from '../context/ThemeContext';
-import { addCoins } from '../services/wallet';
+import { PaymentPackage, RECHARGE_PACKAGES } from '../services/paymentService';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
 }
 
-const PACKS = [
-  { id: '1', coins: 150, price: '₹99', bonus: '', badgeIcon: null },
-  { id: '2', coins: 400, price: '₹249', bonus: '+50 Bonus', badgeIcon: null },
-  { id: '3', coins: 1000, price: '₹499', bonus: 'POPULAR (+200)', badgeIcon: 'flame' as const },
-  { id: '4', coins: 2500, price: '₹999', bonus: 'VIP (+600)', badgeIcon: 'ribbon' as const },
-];
-
 export default function RechargeModal({ visible, onClose }: Props) {
-  const { theme, isDark } = useTheme();
-  const [selectedPack, setSelectedPack] = useState(PACKS[2].id);
-  const [loading, setLoading] = useState(false);
+  const { isDark } = useTheme();
+  const [selectedPackId, setSelectedPackId] = useState(RECHARGE_PACKAGES[1].id);
+  const [paymentSheetVisible, setPaymentSheetVisible] = useState(false);
+  const [pendingPackage, setPendingPackage] = useState<PaymentPackage | null>(null);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [failedModalVisible, setFailedModalVisible] = useState(false);
   const [purchasedCoins, setPurchasedCoins] = useState(0);
 
-  const handlePurchase = async () => {
-    const pack = PACKS.find((p) => p.id === selectedPack) || PACKS[0];
-    setLoading(true);
-    setTimeout(async () => {
-      setLoading(false);
-      try {
-        await addCoins(pack.coins);
-        setPurchasedCoins(pack.coins);
-        setSuccessModalVisible(true);
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (e) {}
-      } catch (e) {
-        setFailedModalVisible(true);
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } catch (err) {}
-      }
-    }, 600);
+  const selectedPack =
+    RECHARGE_PACKAGES.find((p) => p.id === selectedPackId) || RECHARGE_PACKAGES[1];
+
+  const handleOpenPaymentSheet = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+    setPendingPackage(selectedPack);
+    setPaymentSheetVisible(true);
+  };
+
+  const handlePaymentSuccess = (pkg: PaymentPackage) => {
+    setPurchasedCoins(pkg.coinsAwarded);
+    setSuccessModalVisible(true);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View
           style={[
@@ -106,12 +101,12 @@ export default function RechargeModal({ visible, onClose }: Props) {
                 { color: isDark ? '#DFBEC6' : '#6B7280' },
               ]}
             >
-              Coins are used for 1-on-1 private video calls and sending sweet gifts to your favourite companions.
+              Coins are used for 1-on-1 private video calls and unblurring exclusive photos with companions.
             </Text>
 
             <View style={styles.packList}>
-              {PACKS.map((pack) => {
-                const isSelected = pack.id === selectedPack;
+              {RECHARGE_PACKAGES.map((pack) => {
+                const isSelected = pack.id === selectedPackId;
                 return (
                   <TouchableOpacity
                     key={pack.id}
@@ -128,7 +123,7 @@ export default function RechargeModal({ visible, onClose }: Props) {
                         borderColor: isSelected ? '#F65592' : 'transparent',
                       },
                     ]}
-                    onPress={() => setSelectedPack(pack.id)}
+                    onPress={() => setSelectedPackId(pack.id)}
                     activeOpacity={0.8}
                   >
                     <View style={styles.packLeft}>
@@ -140,44 +135,47 @@ export default function RechargeModal({ visible, onClose }: Props) {
                             { color: isDark ? '#E2E2E2' : '#191C1D' },
                           ]}
                         >
-                          {pack.coins} Coins
+                          {pack.coinsAwarded} Coins
                         </Text>
                       </View>
-                      {pack.bonus ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                          {pack.badgeIcon ? (
-                            <Ionicons name={pack.badgeIcon} size={12} color="#10B981" />
-                          ) : null}
-                          <Text style={styles.packBonus}>{pack.bonus}</Text>
+                      <Text style={styles.packBonus}>{pack.title}</Text>
+                    </View>
+                    <View style={styles.packRight}>
+                      {pack.originalAmount ? (
+                        <View style={styles.packDiscountRow}>
+                          <Text style={styles.packOriginalPrice}>₹{pack.originalAmount}</Text>
+                          <View style={styles.packDiscountBadge}>
+                            <Text style={styles.packDiscountText}>{pack.discountPercentage}% OFF</Text>
+                          </View>
                         </View>
                       ) : null}
-                    </View>
-                    <View
-                      style={[
-                        styles.priceBadge,
-                        {
-                          backgroundColor: isSelected
-                            ? '#F65592'
-                            : isDark
-                            ? 'rgba(51, 53, 53, 0.6)'
-                            : 'rgba(0, 0, 0, 0.06)',
-                        },
-                      ]}
-                    >
-                      <Text
+                      <View
                         style={[
-                          styles.priceText,
+                          styles.priceBadge,
                           {
-                            color: isSelected
-                              ? '#FFF'
+                            backgroundColor: isSelected
+                              ? '#F65592'
                               : isDark
-                              ? '#E2E2E2'
-                              : '#191C1D',
+                              ? 'rgba(51, 53, 53, 0.6)'
+                              : 'rgba(0, 0, 0, 0.06)',
                           },
                         ]}
                       >
-                        {pack.price}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.priceText,
+                            {
+                              color: isSelected
+                                ? '#FFF'
+                                : isDark
+                                ? '#E2E2E2'
+                                : '#191C1D',
+                            },
+                          ]}
+                        >
+                          ₹{pack.amount}
+                        </Text>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -186,14 +184,21 @@ export default function RechargeModal({ visible, onClose }: Props) {
 
             <TouchableOpacity
               style={styles.payBtn}
-              onPress={handlePurchase}
-              disabled={loading}
+              onPress={handleOpenPaymentSheet}
               activeOpacity={0.85}
             >
-              <Text style={styles.payText}>{loading ? 'Processing...' : 'Instant Recharge Now'}</Text>
+              <Text style={styles.payText}>Continue to Payment (₹{selectedPack.amount})</Text>
             </TouchableOpacity>
           </BlurView>
         </View>
+
+        {/* Dual Payment Selector Sheet */}
+        <PaymentSelectorSheet
+          visible={paymentSheetVisible}
+          packageItem={pendingPackage}
+          onClose={() => setPaymentSheetVisible(false)}
+          onSuccess={handlePaymentSuccess}
+        />
 
         {/* Recharge Success Modal */}
         <AppModal
@@ -204,38 +209,13 @@ export default function RechargeModal({ visible, onClose }: Props) {
             onClose();
           }}
           title="Recharge Successful!"
-          description={`${purchasedCoins.toLocaleString()} Coins have been credited to your wallet balance. You're ready to start video calling and gifting!`}
+          description={`${purchasedCoins.toLocaleString()} Coins have been added to your offline wallet balance. You are ready to start video calling and unlocking media!`}
           icon="checkmark-circle"
           iconColor="#10B981"
           primaryAction={{
             label: 'Great, Continue',
             onPress: () => {
               setSuccessModalVisible(false);
-              onClose();
-            },
-          }}
-        />
-
-        {/* Recharge Failed Modal */}
-        <AppModal
-          visible={failedModalVisible}
-          useModalHost={false}
-          onClose={() => setFailedModalVisible(false)}
-          title="Recharge Failed"
-          description="We were unable to process your payment. Please check your payment method and try again."
-          icon="alert-circle"
-          iconColor="#EF4444"
-          primaryAction={{
-            label: 'Try Again',
-            onPress: () => {
-              setFailedModalVisible(false);
-            },
-          }}
-          secondaryAction={{
-            label: 'Cancel',
-            variant: 'secondary',
-            onPress: () => {
-              setFailedModalVisible(false);
               onClose();
             },
           }}
@@ -295,9 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
-  },
-  packItemSelected: {
-    backgroundColor: 'rgba(246, 85, 146, 0.25)',
+    borderWidth: 1.5,
   },
   packLeft: {
     gap: 2,
@@ -312,22 +290,42 @@ const styles = StyleSheet.create({
     color: '#4ADE80',
     fontWeight: '600',
   },
+  packRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  packDiscountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  packOriginalPrice: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontWeight: '600',
+  },
+  packDiscountBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  packDiscountText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
   priceBadge: {
     backgroundColor: 'rgba(51, 53, 53, 0.6)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
-  priceBadgeSelected: {
-    backgroundColor: '#F65592',
-  },
   priceText: {
     color: '#E2E2E2',
     fontWeight: '700',
     fontSize: 14,
-  },
-  priceTextSelected: {
-    color: '#FFF',
   },
   payBtn: {
     backgroundColor: '#F65592',
@@ -337,7 +335,7 @@ const styles = StyleSheet.create({
   },
   payText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

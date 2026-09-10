@@ -22,6 +22,7 @@ import AppHeader from '../../components/AppHeader';
 import AppModal from '../../components/AppModal';
 import CoinIcon from '../../components/CoinIcon';
 import DailyCheckInModal from '../../components/DailyCheckInModal';
+import LegalViewerModal from '../../components/LegalViewerModal';
 import RechargeModal from '../../components/RechargeModal';
 import { useAuth } from '../../context/AuthContext';
 import { useTabBlur } from '../../context/TabBlurContext';
@@ -840,181 +841,12 @@ export default function UserProfileTab() {
         }}
       />
 
-      {/* User Agreement & Privacy Policy Sheet */}
-      <Modal
+      {/* Full Legally-Protective User Agreement & Privacy Policy Modal */}
+      <LegalViewerModal
         visible={policyModal !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPolicyModal(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.policyCard,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <View style={styles.policyHeader}>
-              <Text
-                style={[
-                  styles.policyTitle,
-                  { color: theme.colors.onSurface },
-                ]}
-              >
-                {policyModal === 'agreement' ? 'User Agreement' : 'Privacy Policy'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setPolicyModal(null)}
-                style={[
-                  styles.policyCloseBtn,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255, 255, 255, 0.12)'
-                      : 'rgba(0, 0, 0, 0.08)',
-                  },
-                ]}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="close"
-                  size={18}
-                  color={theme.colors.onSurface}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.policyScroll}
-              showsVerticalScrollIndicator={false}
-            >
-              {policyModal === 'agreement' ? (
-                <View style={styles.policyTextWrap}>
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    1. Acceptance of Terms
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    By accessing DreamDate, you agree to be bound by these Terms of Service. DreamDate provides virtual companion interactions designed strictly for entertainment and social simulation.
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    2. Age Requirement
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    You must be at least 18 years of age or the age of legal majority in your jurisdiction to use DreamDate.
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    3. Virtual Currencies & Coins
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Coins and virtual gifts purchased or granted within DreamDate have no real-world monetary value and cannot be redeemed for fiat currency.
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    4. Code of Conduct
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Users agree to maintain respectful communications. Harassment, illegal content, and offensive behavior will result in permanent account termination.
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.policyTextWrap}>
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    1. Information We Collect
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    We collect basic usage diagnostics, coin transaction history, and local preferences to provide personalized virtual companion recommendations.
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    2. Security & Data Protection
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Your private chats and call histories are stored safely on your device and encrypted during network transmission. We do not sell user data to third parties.
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.policyHeading,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    3. Data Retention
-                  </Text>
-                  <Text
-                    style={[
-                      styles.policyBody,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    You can delete your chat histories and clear cached companion data at any time directly through the app settings or by contacting support.
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        initialTab={policyModal === 'agreement' ? 'terms' : 'privacy'}
+        onClose={() => setPolicyModal(null)}
+      />
     </SafeAreaView>
   </AppBackground>
 </BlurTargetView>

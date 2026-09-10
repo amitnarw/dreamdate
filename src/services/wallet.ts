@@ -1,32 +1,75 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 
-const WALLET_KEY = '@talkmate_user_coins_v1';
-const INITIAL_COINS = 300;
+const WALLET_KEY = '@dreamdate_user_coins_v2';
+const VIP_STORAGE_KEY = '@dreamdate_user_vip_v2';
+const HAS_PURCHASED_KEY = '@dreamdate_has_purchased_v1';
+const INITIAL_COINS = 100; // 100 Welcome Coins on initial start
 
-type WalletListener = (coins: number) => void;
+type WalletListener = (coins: number, isVip: boolean, hasPurchased: boolean) => void;
 const listeners = new Set<WalletListener>();
 
 let currentCoins = INITIAL_COINS;
+let currentVipExpiresAt: number | null = null;
+let currentHasPurchased = false;
 
-export async function initWallet(): Promise<number> {
+export async function initWallet(): Promise<{ coins: number; isVip: boolean; hasPurchased: boolean }> {
   try {
-    const stored = await AsyncStorage.getItem(WALLET_KEY);
-    if (stored !== null) {
-      currentCoins = parseInt(stored, 10) || INITIAL_COINS;
+    const storedCoins = await AsyncStorage.getItem(WALLET_KEY);
+    if (storedCoins !== null) {
+      currentCoins = parseInt(storedCoins, 10) || 0;
     } else {
       currentCoins = INITIAL_COINS;
       await AsyncStorage.setItem(WALLET_KEY, currentCoins.toString());
     }
+
+    const storedVip = await AsyncStorage.getItem(VIP_STORAGE_KEY);
+    if (storedVip !== null) {
+      const timestamp = parseInt(storedVip, 10);
+      if (timestamp > Date.now()) {
+        currentVipExpiresAt = timestamp;
+      } else {
+        currentVipExpiresAt = null;
+        await AsyncStorage.removeItem(VIP_STORAGE_KEY);
+      }
+    }
+
+    const storedPurchased = await AsyncStorage.getItem(HAS_PURCHASED_KEY);
+    currentHasPurchased = storedPurchased === 'true';
   } catch (e) {
     currentCoins = INITIAL_COINS;
   }
   notifyListeners();
-  return currentCoins;
+  return {
+    coins: currentCoins,
+    isVip: isVipActive(),
+    hasPurchased: currentHasPurchased,
+  };
 }
 
 export function getCoins(): number {
   return currentCoins;
+}
+
+export function isVipActive(): boolean {
+  if (!currentVipExpiresAt) return false;
+  return currentVipExpiresAt > Date.now();
+}
+
+export function hasUserPurchased(): boolean {
+  return currentHasPurchased;
+}
+
+export function getVipExpiresAt(): number | null {
+  return currentVipExpiresAt;
+}
+
+export async function recordPurchase(): Promise<void> {
+  currentHasPurchased = true;
+  try {
+    await AsyncStorage.setItem(HAS_PURCHASED_KEY, 'true');
+  } catch (e) {}
+  notifyListeners();
 }
 
 export async function addCoins(amount: number): Promise<number> {
@@ -50,16 +93,43 @@ export async function deductCoins(amount: number): Promise<boolean> {
   return true;
 }
 
+export async function activateWeeklyVip(bonusCoins: number = 1500): Promise<void> {
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+  const newExpiration = (isVipActive() && currentVipExpiresAt ? currentVipExpiresAt : Date.now()) + oneWeekMs;
+  currentVipExpiresAt = newExpiration;
+  currentCoins += bonusCoins;
+  currentHasPurchased = true;
+
+  try {
+    await AsyncStorage.setItem(VIP_STORAGE_KEY, newExpiration.toString());
+    await AsyncStorage.setItem(WALLET_KEY, currentCoins.toString());
+    await AsyncStorage.setItem(HAS_PURCHASED_KEY, 'true');
+  } catch (e) {}
+
+  notifyListeners();
+}
+
 function notifyListeners() {
-  listeners.forEach((l) => l(currentCoins));
+  const isVip = isVipActive();
+  listeners.forEach((l) => l(currentCoins, isVip, currentHasPurchased));
 }
 
 export function useWallet() {
   const [coins, setCoins] = useState<number>(currentCoins);
+  const [isVip, setIsVip] = useState<boolean>(isVipActive());
+  const [hasPurchased, setHasPurchased] = useState<boolean>(currentHasPurchased);
 
   useEffect(() => {
-    initWallet().then(setCoins);
-    const listener: WalletListener = (newCoins) => setCoins(newCoins);
+    initWallet().then((res) => {
+      setCoins(res.coins);
+      setIsVip(res.isVip);
+      setHasPurchased(res.hasPurchased);
+    });
+    const listener: WalletListener = (newCoins, newVip, newPurchased) => {
+      setCoins(newCoins);
+      setIsVip(newVip);
+      setHasPurchased(newPurchased);
+    };
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
@@ -68,7 +138,11 @@ export function useWallet() {
 
   return {
     coins,
+    isVip,
+    hasPurchased,
     deductCoins,
     addCoins,
+    activateWeeklyVip,
+    recordPurchase,
   };
 }

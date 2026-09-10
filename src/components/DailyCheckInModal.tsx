@@ -14,8 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppModal from './AppModal';
 import CoinIcon from './CoinIcon';
+import RechargeModal from './RechargeModal';
 import { useTheme } from '../context/ThemeContext';
-import { addCoins } from '../services/wallet';
+import { addCoins, useWallet } from '../services/wallet';
 
 interface Props {
   visible: boolean;
@@ -46,10 +47,12 @@ const STORAGE_DATE_KEY = '@dreamdate_last_checkin_timestamp';
 export default function DailyCheckInModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { hasPurchased } = useWallet();
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [alreadyClaimedToday, setAlreadyClaimedToday] = useState(false);
   const [justClaimedAmount, setJustClaimedAmount] = useState<number | null>(null);
   const [claimSuccessModalVisible, setClaimSuccessModalVisible] = useState(false);
+  const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -364,41 +367,102 @@ export default function DailyCheckInModal({ visible, onClose }: Props) {
               );
             })()}
 
-            {/* Claim Action Button */}
-            <TouchableOpacity
-              style={[
-                styles.claimBtn,
-                alreadyClaimedToday && styles.claimBtnDisabled,
-              ]}
-              onPress={handleClaim}
-              disabled={alreadyClaimedToday}
-              activeOpacity={0.88}
-            >
-              <LinearGradient
-                colors={
-                  alreadyClaimedToday
-                    ? ['#3D3538', '#2D282A']
-                    : ['#FF2A7A', '#FF69B4', '#FF416C']
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.claimBtnGradient}
+            {/* If user hasn't made a recharge or VIP purchase, show locked banner and unlock button */}
+            {!hasPurchased ? (
+              <View
+                style={[
+                  styles.lockedMemberCard,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(239, 68, 68, 0.16)'
+                      : 'rgba(239, 68, 68, 0.08)',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                  },
+                ]}
               >
-                <Ionicons
-                  name={alreadyClaimedToday ? 'checkmark-circle' : 'gift'}
-                  size={20}
-                  color="#FFF"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.claimBtnText}>
-                  {alreadyClaimedToday
-                    ? 'Checked In Today • Come Back Tomorrow'
-                    : `Claim Day ${todayReward.day} Bonus (+${todayReward.coins} Coins)`}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <Ionicons name="lock-closed" size={20} color="#EF4444" />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.lockedMemberTitle,
+                      { color: isDark ? '#FFFFFF' : '#991B1B' },
+                    ]}
+                  >
+                    Members-Only Exclusive Perk
+                  </Text>
+                  <Text
+                    style={[
+                      styles.lockedMemberSub,
+                      { color: isDark ? '#FCA5A5' : '#B91C1C' },
+                    ]}
+                  >
+                    Daily Check-In is unlocked after at least 1 recharge or VIP pass. Complete a recharge to start claiming 7 days of daily free coins!
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Claim Action Button or Recharge Button */}
+            {!hasPurchased ? (
+              <TouchableOpacity
+                style={styles.claimBtn}
+                onPress={() => setRechargeModalVisible(true)}
+                activeOpacity={0.88}
+              >
+                <LinearGradient
+                  colors={['#F65592', '#E11D48']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.claimBtnGradient}
+                >
+                  <Ionicons name="flash" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.claimBtnText}>
+                    Recharge to Unlock Daily Rewards
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.claimBtn,
+                  alreadyClaimedToday && styles.claimBtnDisabled,
+                ]}
+                onPress={handleClaim}
+                disabled={alreadyClaimedToday}
+                activeOpacity={0.88}
+              >
+                <LinearGradient
+                  colors={
+                    alreadyClaimedToday
+                      ? ['#3D3538', '#2D282A']
+                      : ['#FF2A7A', '#FF69B4', '#FF416C']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.claimBtnGradient}
+                >
+                  <Ionicons
+                    name={alreadyClaimedToday ? 'checkmark-circle' : 'gift'}
+                    size={20}
+                    color="#FFF"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.claimBtnText}>
+                    {alreadyClaimedToday
+                      ? 'Checked In Today • Come Back Tomorrow'
+                      : `Claim Day ${todayReward.day} Bonus (+${todayReward.coins} Coins)`}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </BlurView>
         </View>
+
+        {/* Recharge Modal to unlock daily check in */}
+        <RechargeModal
+          visible={rechargeModalVisible}
+          onClose={() => setRechargeModalVisible(false)}
+        />
 
         {/* Daily Bonus Claimed Custom Modal */}
         <AppModal
@@ -628,5 +692,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  lockedMemberCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 14,
+  },
+  lockedMemberTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  lockedMemberSub: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
   },
 });

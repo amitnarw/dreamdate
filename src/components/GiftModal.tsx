@@ -32,7 +32,7 @@ interface Props {
   onNeedRecharge: () => void;
 }
 
-const CATEGORIES: Array<VirtualGift['category']> = ['Popular', 'Romance', 'Luxury', 'VIP'];
+const CATEGORIES: Array<VirtualGift['category']> = ['Popular', 'Romantic', 'Luxury', 'VIP'];
 
 const GIFT_GROUPS: Array<{
   category: VirtualGift['category'];
@@ -41,7 +41,7 @@ const GIFT_GROUPS: Array<{
   badgeIcon: keyof typeof Ionicons.glyphMap;
 }> = [
   { category: 'Popular', label: 'Popular Treats', badge: 'Trending', badgeIcon: 'flame' },
-  { category: 'Romance', label: 'Romance & Love', badge: 'Romantic', badgeIcon: 'heart' },
+  { category: 'Romantic', label: 'Romance & Love', badge: 'Romantic', badgeIcon: 'heart' },
   { category: 'Luxury', label: 'Luxury & Glamour', badge: 'High Roller', badgeIcon: 'diamond' },
   { category: 'VIP', label: 'Ultra VIP Exclusives', badge: 'VIP Only', badgeIcon: 'ribbon' },
 ];

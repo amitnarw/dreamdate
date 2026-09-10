@@ -31,6 +31,7 @@ import RechargeModal from '../../components/RechargeModal';
 import { useTheme } from '../../context/ThemeContext';
 import { StitchTheme } from '../../constants/theme';
 import { FAKE_CALL_VIDEOS, MOCK_PROFILES, Profile, VIRTUAL_GIFTS, findGiftVisual } from '../../data/mockProfiles';
+import { saveCallLog } from '../../services/callHistoryService';
 import { deductCoins, useWallet } from '../../services/wallet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -247,6 +248,18 @@ export default function VideoCallScreen() {
       player.pause();
     } catch (e) {}
     setCallState('ended');
+
+    const durationMins = callSeconds > 0 ? Math.ceil(callSeconds / 60) : 0;
+    const coinsSpent = durationMins * profile.callRate;
+    saveCallLog({
+      profileId: profile.id,
+      name: profile.name,
+      avatar: profile.avatar,
+      city: profile.city,
+      type: 'outgoing',
+      durationSeconds: callSeconds,
+      coinsSpent: coinsSpent,
+    });
   };
 
   const handleGiftSent = (gift: any) => {
@@ -533,7 +546,18 @@ export default function VideoCallScreen() {
             <Text style={styles.handshakeText}>Connecting secure audio & video stream...</Text>
             <TouchableOpacity
               style={styles.hangupButtonLarge}
-              onPress={() => router.back()}
+              onPress={() => {
+                saveCallLog({
+                  profileId: profile.id,
+                  name: profile.name,
+                  avatar: profile.avatar,
+                  city: profile.city,
+                  type: 'missed',
+                  durationSeconds: 0,
+                  coinsSpent: 0,
+                });
+                router.back();
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />

@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   BackHandler,
   FlatList,
   Image,
@@ -15,13 +16,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppBackground from '../../components/AppBackground';
-import AppBlurView from '../../components/AppBlurView';
 import AppHeader from '../../components/AppHeader';
 import AppModal from '../../components/AppModal';
 import { useTabBlur } from '../../context/TabBlurContext';
 import { useTheme } from '../../context/ThemeContext';
-import { MOCK_PROFILES, Profile } from '../../data/mockProfiles';
-import { useWallet } from '../../services/wallet';
+import { ARCHETYPE_META, CharacterArchetype, MOCK_PROFILES, Profile } from '../../data/mockProfiles';
 
 function GridProfileCard({
   item,
@@ -32,7 +31,7 @@ function GridProfileCard({
   index: number;
   router: any;
 }) {
-  const isBusy = index === 1;
+  const isBusy = !item.isOnline || index % 5 === 1;
   const { theme, isDark } = useTheme();
 
   return (
@@ -43,7 +42,7 @@ function GridProfileCard({
           backgroundColor: isDark ? '#1C1618' : '#FFFFFF',
         },
       ]}
-      onPress={() => router.push(`/profile/${item.id}` as any)}
+      onPress={() => router.push(`/profile/${item.id.split('_p')[0]}` as any)}
       activeOpacity={0.9}
     >
       {/* Background & Avatar Image */}
@@ -57,7 +56,7 @@ function GridProfileCard({
         <Image source={{ uri: item.avatar }} style={StyleSheet.absoluteFill} />
       ) : null}
 
-      {/* Smooth Vertical Gradient Fade (No Hard Cutoff, No Black Corners) */}
+      {/* Smooth Vertical Gradient Fade */}
       <LinearGradient
         colors={
           isDark
@@ -79,7 +78,7 @@ function GridProfileCard({
         pointerEvents="none"
       />
 
-      {/* Status Badge (Online / Busy) - Colored Badge Without Dot */}
+      {/* Status Badge (Online / Busy) */}
       <View
         style={[
           styles.statusBadge,
@@ -93,17 +92,50 @@ function GridProfileCard({
         </Text>
       </View>
 
+      {/* Archetype Personality Badge (Top Right) */}
+      {(() => {
+        const meta = ARCHETYPE_META[item.archetype] || ARCHETYPE_META.playful_tease;
+        return (
+          <View
+            style={[
+              styles.cardArchetypeBadge,
+              {
+                borderColor: meta.badgeColor + '80',
+              },
+            ]}
+          >
+            <Text style={styles.cardArchetypeEmoji}>{meta.emoji}</Text>
+            <Text style={styles.cardArchetypeText} numberOfLines={1}>
+              {meta.label.split(' ')[0]}
+            </Text>
+          </View>
+        );
+      })()}
+
       {/* Companion Details at Bottom */}
       <View style={styles.cardGlassPanel} pointerEvents="none">
-        <Text
-          style={[
-            styles.cardName,
-            { color: isDark ? '#FFFFFF' : '#191C1D' },
-          ]}
-          numberOfLines={1}
-        >
-          {item.name}, {item.age}
-        </Text>
+        {/* Name and Age: Name truncates if long, Age is ALWAYS visible */}
+        <View style={styles.cardNameRow}>
+          <Text
+            style={[
+              styles.cardName,
+              { color: isDark ? '#FFFFFF' : '#191C1D' },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.name}
+          </Text>
+          <Text
+            style={[
+              styles.cardAge,
+              { color: isDark ? '#FFFFFF' : '#191C1D' },
+            ]}
+          >
+            , {item.age}
+          </Text>
+        </View>
+
         <View style={styles.cardLocationRow}>
           <Ionicons
             name="location-sharp"
@@ -124,11 +156,11 @@ function GridProfileCard({
 
       {/* Vertical Action Column on the Right Side */}
       <View style={styles.cardVerticalActionsCol}>
-        {/* Top Button: Circular Chat Button with Centered Icon */}
+        {/* Top Button: Circular Chat Button */}
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/chat/${item.id}` as any);
+            router.push(`/chat/${item.id.split('_p')[0]}` as any);
           }}
           style={[
             styles.actionCircleBlurBtn,
@@ -138,33 +170,55 @@ function GridProfileCard({
                 : '#FFFFFF',
               borderColor: isDark
                 ? 'rgba(255, 255, 255, 0.15)'
-                : 'rgba(0, 0, 0, 0.08)',
+                : 'rgba(0, 0, 0, 0.10)',
             },
           ]}
           activeOpacity={0.8}
         >
           <Ionicons
             name="chatbubble-ellipses"
-            size={18}
-            color={isDark ? '#FFF' : '#F65592'}
+            size={16}
+            color={isDark ? '#F65592' : '#E11D48'}
           />
         </TouchableOpacity>
 
-        {/* Bottom Button: Circular Vibrant Primary Pink Video Call Button */}
+        {/* Bottom Button: Circular Video Call Button */}
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/call/${item.id}` as any);
+            router.push(`/call/${item.id.split('_p')[0]}` as any);
           }}
-          style={styles.actionCircleSolidBtn}
+          style={[
+            styles.actionCircleBlurBtn,
+            {
+              backgroundColor: isDark
+                ? 'rgba(28, 18, 22, 0.85)'
+                : '#FFFFFF',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.15)'
+                : 'rgba(0, 0, 0, 0.10)',
+            },
+          ]}
           activeOpacity={0.8}
         >
-          <Ionicons name="videocam" size={18} color="#FFF" />
+          <Ionicons
+            name="videocam"
+            size={16}
+            color={isDark ? '#FFD700' : '#D97706'}
+          />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
+
+const FILTER_TABS: { key: 'all' | CharacterArchetype; label: string; emoji: string }[] = [
+  { key: 'all', label: 'All', emoji: '✨' },
+  { key: 'playful_tease', label: 'Playful', emoji: '😜' },
+  { key: 'sweet_romantic', label: 'Romantic', emoji: '🌸' },
+  { key: 'bold_alluring', label: 'Bold', emoji: '🔥' },
+  { key: 'mysterious_sensual', label: 'Mysterious', emoji: '✨' },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -172,9 +226,38 @@ export default function HomeScreen() {
   const { targets, notifyTargetMounted } = useTabBlur();
   const [exitModalVisible, setExitModalVisible] = useState(false);
 
+  // Endless Profile List State
+  const [profilesList, setProfilesList] = useState<Profile[]>(MOCK_PROFILES);
+  const [selectedFilter, setSelectedFilter] = useState<'all' | CharacterArchetype>('all');
+  const [page, setPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const filteredProfiles = React.useMemo(() => {
+    if (selectedFilter === 'all') return profilesList;
+    return profilesList.filter((p) => p.archetype === selectedFilter);
+  }, [profilesList, selectedFilter]);
+
   useEffect(() => {
     notifyTargetMounted();
   }, []);
+
+  const handleLoadMore = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+
+    setTimeout(() => {
+      const nextPage = page + 1;
+      const moreProfiles: Profile[] = MOCK_PROFILES.map((p, idx) => ({
+        ...p,
+        id: `${p.id}_p${nextPage}_${idx}`,
+        isOnline: Math.random() > 0.2,
+        totalCalls: p.totalCalls + Math.floor(Math.random() * 120) + 15,
+      }));
+      setProfilesList((prev) => [...prev, ...moreProfiles]);
+      setPage(nextPage);
+      setIsLoadingMore(false);
+    }, 400);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -201,7 +284,7 @@ export default function HomeScreen() {
           style={styles.container}
           edges={['left', 'right']}
         >
-          {/* Standardized AppHeader (Consistent with Female Details Page) */}
+          {/* AppHeader */}
           <AppHeader
             title="DreamDate"
             showCoins={true}
@@ -212,41 +295,105 @@ export default function HomeScreen() {
             }
           />
 
-          {/* Scroll Area with Top/Bottom Edge Fades */}
-          <View style={{ flex: 1, position: 'relative' }}>
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Discover Section Title */}
-              <View style={styles.titleRow}>
-                <Text
-                  style={[
-                    styles.headlineText,
-                    { color: isDark ? '#FFFFFF' : '#191C1D' },
-                  ]}
-                >
-                  Discover
-                </Text>
-              </View>
+          {/* Endless Grid List with Native Infinite Scroll */}
+          <FlatList
+            data={filteredProfiles}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.gridRow}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <View>
+                <View style={styles.titleRow}>
+                  <View>
+                    <Text
+                      style={[
+                        styles.headlineText,
+                        { color: isDark ? '#FFFFFF' : '#191C1D' },
+                      ]}
+                    >
+                      Discover
+                    </Text>
+                    <Text
+                      style={[
+                        styles.headlineSub,
+                        { color: isDark ? '#DFBEC6' : '#6B7280' },
+                      ]}
+                    >
+                      🔥 4,280 Female Companions Online Now
+                    </Text>
+                  </View>
+                </View>
 
-              {/* Grid List */}
-              <FlatList
-                data={MOCK_PROFILES}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                columnWrapperStyle={styles.gridRow}
-                scrollEnabled={false}
-                renderItem={({ item, index }) => (
-                  <GridProfileCard
-                    item={item}
-                    index={index}
-                    router={router}
-                  />
-                )}
+                {/* Personality Archetype Filter Chips */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterScroll}
+                >
+                  {FILTER_TABS.map((tab) => {
+                    const isSelected = selectedFilter === tab.key;
+                    return (
+                      <TouchableOpacity
+                        key={tab.key}
+                        style={[
+                          styles.filterChip,
+                          isSelected && styles.filterChipActive,
+                          {
+                            backgroundColor: isSelected
+                              ? '#F65592'
+                              : isDark
+                              ? 'rgba(255, 255, 255, 0.08)'
+                              : 'rgba(0, 0, 0, 0.06)',
+                            borderColor: isSelected
+                              ? '#F65592'
+                              : isDark
+                              ? 'rgba(255, 255, 255, 0.10)'
+                              : 'rgba(0, 0, 0, 0.08)',
+                          },
+                        ]}
+                        onPress={() => setSelectedFilter(tab.key)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.filterEmoji}>{tab.emoji}</Text>
+                        <Text
+                          style={[
+                            styles.filterLabel,
+                            {
+                              color: isSelected ? '#FFFFFF' : isDark ? '#E5E7EB' : '#374151',
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {tab.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            }
+            ListFooterComponent={
+              isLoadingMore ? (
+                <View style={styles.loadingMoreWrap}>
+                  <ActivityIndicator size="small" color="#F65592" />
+                  <Text style={[styles.loadingMoreText, { color: isDark ? '#DFBEC6' : '#6B7280' }]}>
+                    Discovering more female companions...
+                  </Text>
+                </View>
+              ) : null
+            }
+            renderItem={({ item, index }) => (
+              <GridProfileCard
+                item={item}
+                index={index}
+                router={router}
               />
-            </ScrollView>
-          </View>
+            )}
+          />
 
           {/* Exit Confirmation Dialog */}
           <AppModal
@@ -287,21 +434,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 110,
-    gap: 16,
   },
   titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   headlineText: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     letterSpacing: -0.3,
   },
-  viewAllText: {
+  headlineSub: {
     fontSize: 12,
-    fontWeight: '600',
+    marginTop: 2,
+    fontWeight: '500',
   },
   gridRow: {
     justifyContent: 'space-between',
@@ -318,11 +463,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 9,
     left: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 10,
   },
   statusText: {
@@ -330,6 +473,54 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  cardArchetypeBadge: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 3,
+    zIndex: 10,
+  },
+  cardArchetypeEmoji: {
+    fontSize: 10,
+  },
+  cardArchetypeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  filterScroll: {
+    gap: 8,
+    paddingBottom: 12,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 5,
+  },
+  filterChipActive: {
+    shadowColor: '#F65592',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterEmoji: {
+    fontSize: 13,
+  },
+  filterLabel: {
+    fontSize: 12,
   },
   cardGlassPanel: {
     position: 'absolute',
@@ -342,9 +533,20 @@ const styles = StyleSheet.create({
     gap: 2,
     zIndex: 5,
   },
+  cardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
   cardName: {
     fontSize: 13,
     fontWeight: '700',
+    flexShrink: 1,
+  },
+  cardAge: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 0,
   },
   cardLocationRow: {
     flexDirection: 'row',
@@ -355,44 +557,35 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
   },
-  topScrollFade: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 18,
-    zIndex: 15,
-  },
-  bottomScrollFade: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 28,
-    zIndex: 15,
-  },
   cardVerticalActionsCol: {
     position: 'absolute',
-    right: 8,
-    bottom: 8,
-    alignItems: 'center',
+    bottom: 10,
+    right: 10,
     gap: 8,
-    zIndex: 20,
+    zIndex: 10,
   },
   actionCircleBlurBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  actionCircleSolidBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F65592',
+  loadingMoreWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
