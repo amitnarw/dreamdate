@@ -109,18 +109,15 @@ export default function LoginScreen() {
 
         {/* Middle: Brand Section */}
         <View style={styles.centerBrandSection}>
-          <LinearGradient
-            colors={['#F65592', '#FF70A0']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <Image
+            source={require('../../assets/images/logo.png')}
             style={styles.logoCircle}
-          >
-            <Ionicons name="videocam" size={34} color="#FFFFFF" />
-          </LinearGradient>
-          <Text style={styles.brandTitle}>DreamDate</Text>
-          <Text style={styles.brandSubtitle}>Live 1-on-1 Private Video Calls</Text>
+            resizeMode="cover"
+          />
+          <Text style={styles.brandTitle}>BoloNa</Text>
+          <Text style={styles.brandSubtitle}>Live Video calling & Chat</Text>
           <Text style={styles.brandCaption}>
-            Connect face-to-face with stunning female companions tonight
+            Naye logon se Live Video Chat aur one-to-one Video Call par connect karein.
           </Text>
         </View>
 
@@ -145,7 +142,7 @@ export default function LoginScreen() {
           <View style={styles.bonusChipWrap}>
             <View style={styles.bonusChip}>
               <CoinIcon size={16} />
-              <Text style={styles.bonusText}>100 Free Welcome Coins on Fast Login</Text>
+              <Text style={styles.bonusText}>50 Free Coins on Fast Login</Text>
             </View>
           </View>
 
@@ -322,11 +319,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 76,
+    height: 76,
+    borderRadius: 22,
     marginBottom: 16,
   },
   brandTitle: {

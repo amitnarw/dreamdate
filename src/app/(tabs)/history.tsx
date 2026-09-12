@@ -16,12 +16,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppBackground from '../../components/AppBackground';
 import AppBlurView from '../../components/AppBlurView';
 import AppHeader from '../../components/AppHeader';
+import AppModal from '../../components/AppModal';
 import CoinIcon from '../../components/CoinIcon';
 import RechargeModal from '../../components/RechargeModal';
+import { MOCK_PROFILES } from '../../data/mockProfiles';
 import { StitchTheme } from '../../constants/theme';
 import { useTabBlur } from '../../context/TabBlurContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -33,6 +35,7 @@ import {
 import {
   ChatThreadItem,
   getActiveChatThreads,
+  markChatAsRead,
 } from '../../services/chatEngine';
 import { useWallet } from '../../services/wallet';
 
@@ -69,9 +72,22 @@ function formatCallDuration(seconds: number): string {
 
 export default function MessageCenterHistory() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const emptyBottomPadding = Math.max(insets.bottom, 16) + 72;
   const { coins } = useWallet();
   const [activeTab, setActiveTab] = useState<TabType>('chats');
   const [rechargeVisible, setRechargeVisible] = useState(false);
+  const [lowBalanceAlert, setLowBalanceAlert] = useState<{ visible: boolean; name: string; rate: number }>({ visible: false, name: '', rate: 0 });
+
+  const handleCallPress = (profileId: string, name: string) => {
+    const profile = MOCK_PROFILES.find((p) => p.id === profileId);
+    const rate = profile?.callRate ?? 50;
+    if (coins < rate) {
+      setLowBalanceAlert({ visible: true, name, rate });
+      return;
+    }
+    router.push(`/call/${profileId}` as any);
+  };
   const [tabBarWidth, setTabBarWidth] = useState(SCREEN_WIDTH - 40);
 
   // Dynamic Real Storage State (Zero hardcoded fake logs)
@@ -244,9 +260,9 @@ export default function MessageCenterHistory() {
               contentContainerStyle={{ width: SCREEN_WIDTH * 2 }}
             >
               {/* Page 1: Real Chat Conversations */}
-              <View style={{ width: SCREEN_WIDTH }}>
+              <View style={{ width: SCREEN_WIDTH, height: '100%' }}>
                 {chatThreads.length === 0 ? (
-                  <View style={styles.emptyContainer}>
+                  <View style={[styles.emptyContainer, { paddingBottom: emptyBottomPadding }]}>
                     <View style={styles.emptyIconCircle}>
                       <Ionicons name="chatbubble-ellipses-outline" size={42} color="#F65592" />
                     </View>
@@ -282,7 +298,17 @@ export default function MessageCenterHistory() {
                                 : '#FFFFFF',
                             },
                           ]}
-                          onPress={() => router.push(`/chat/${item.profileId}` as any)}
+                          onPress={() => {
+                            markChatAsRead(item.profileId);
+                            setChatThreads((prev) =>
+                              prev.map((t) =>
+                                t.profileId === item.profileId
+                                  ? { ...t, unread: false }
+                                  : t
+                              )
+                            );
+                            router.push(`/chat/${item.profileId}` as any);
+                          }}
                           activeOpacity={0.8}
                         >
                           {/* Story Ring Avatar + Online Dot */}
@@ -350,9 +376,9 @@ export default function MessageCenterHistory() {
               </View>
 
               {/* Page 2: Real Video Calls Log */}
-              <View style={{ width: SCREEN_WIDTH }}>
+              <View style={{ width: SCREEN_WIDTH, height: '100%' }}>
                 {callLogs.length === 0 ? (
-                  <View style={styles.emptyContainer}>
+                  <View style={[styles.emptyContainer, { paddingBottom: emptyBottomPadding }]}>
                     <View style={styles.emptyIconCircle}>
                       <Ionicons name="videocam-outline" size={42} color="#F65592" />
                     </View>
@@ -389,7 +415,7 @@ export default function MessageCenterHistory() {
                                 : '#FFFFFF',
                             },
                           ]}
-                          onPress={() => router.push(`/call/${item.profileId}` as any)}
+                          onPress={() => handleCallPress(item.profileId, item.name)}
                           activeOpacity={0.8}
                         >
                           <Image source={{ uri: item.avatar }} style={styles.callAvatar} />
@@ -445,7 +471,7 @@ export default function MessageCenterHistory() {
 
                           <TouchableOpacity
                             style={styles.reCallBtn}
-                            onPress={() => router.push(`/call/${item.profileId}` as any)}
+                            onPress={() => handleCallPress(item.profileId, item.name)}
                             activeOpacity={0.85}
                           >
                             <Ionicons name="videocam" size={18} color="#FFF" />
@@ -460,6 +486,26 @@ export default function MessageCenterHistory() {
           </View>
 
           <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
+
+          {/* Low Balance Alert */}
+          <AppModal
+            visible={lowBalanceAlert.visible}
+            onClose={() => setLowBalanceAlert({ visible: false, name: '', rate: 0 })}
+            title="Insufficient Coins"
+            description={`${lowBalanceAlert.name}'s video call rate is ${lowBalanceAlert.rate} coins/min. You have ${coins} coins. Please recharge to call!`}
+            icon="videocam-outline"
+            primaryAction={{
+              label: 'Recharge Now',
+              onPress: () => {
+                setLowBalanceAlert({ visible: false, name: '', rate: 0 });
+                setRechargeVisible(true);
+              },
+            }}
+            secondaryAction={{
+              label: 'Cancel',
+              onPress: () => setLowBalanceAlert({ visible: false, name: '', rate: 0 }),
+            }}
+          />
         </SafeAreaView>
       </AppBackground>
     </BlurTargetView>
@@ -616,7 +662,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 36,
-    paddingTop: 80,
   },
   emptyIconCircle: {
     width: 80,

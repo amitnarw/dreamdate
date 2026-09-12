@@ -1,11 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { BlurTargetView, BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
-import { Image as ExpoImage } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { BlurTargetView, BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { Image as ExpoImage } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
@@ -18,27 +18,36 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AppBlurView from '../../components/AppBlurView';
-import BackButton from '../../components/BackButton';
-import GiftModal from '../../components/GiftModal';
-import RechargeModal from '../../components/RechargeModal';
-import { useTheme } from '../../context/ThemeContext';
-import { MOCK_PROFILES, Profile, VIRTUAL_GIFTS } from '../../data/mockProfiles';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AppBlurView from "../../components/AppBlurView";
+import AppModal from "../../components/AppModal";
+import BackButton from "../../components/BackButton";
+import GiftModal from "../../components/GiftModal";
+import RechargeModal from "../../components/RechargeModal";
+import { useTheme } from "../../context/ThemeContext";
+import { MOCK_PROFILES, Profile, ProfileMediaItem, VIRTUAL_GIFTS } from "../../data/mockProfiles";
+import { deductCoins, useWallet } from "../../services/wallet";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function UserProfileDetail1to1() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const profile: Profile = MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
+  const profile: Profile =
+    MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
+  const { coins, isVip } = useWallet();
 
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [callLowBalanceVisible, setCallLowBalanceVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  // Locked-photo gallery unlock (per-session; mirrors the chat unlock flow)
+  const [unlockedLocked, setUnlockedLocked] = useState<Set<string>>(new Set());
+  const [lockTarget, setLockTarget] = useState<ProfileMediaItem | null>(null);
+  const [unlockBusy, setUnlockBusy] = useState(false);
 
   // Active photo gallery state isolated strictly to this companion
   const photoList = [
@@ -47,6 +56,14 @@ export default function UserProfileDetail1to1() {
       ? profile.photos
       : [profile.coverImage || profile.avatar]),
   ].filter((v, i, a) => !!v && a.indexOf(v) === i);
+
+  type GalleryItem =
+    | { kind: 'free'; uri: string }
+    | { kind: 'locked'; item: ProfileMediaItem };
+  const galleryItems: GalleryItem[] = [
+    ...photoList.map((uri): GalleryItem => ({ kind: 'free', uri })),
+    ...(profile.lockedPhotos ?? []).map((item): GalleryItem => ({ kind: 'locked', item })),
+  ];
   const [selectedPhoto, setSelectedPhoto] = useState(profile.avatar);
 
   // Prefetch gallery photos into memory for instant, buttery smooth switching
@@ -56,13 +73,49 @@ export default function UserProfileDetail1to1() {
         ExpoImage.prefetch(uri);
       }
     });
+    (profile.lockedPhotos ?? []).forEach((lp) => {
+      if (lp.url) {
+        ExpoImage.prefetch(lp.url);
+      }
+    });
   }, [profile.id]);
+
+  const handleUnlockConfirm = async () => {
+    if (!lockTarget || unlockBusy) return;
+    if (isVip) {
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+      const url = lockTarget.url;
+      const id = lockTarget.id;
+      setLockTarget(null);
+      setUnlockedLocked((prev) => new Set(prev).add(id));
+      setSelectedPhoto(url);
+      return;
+    }
+    setUnlockBusy(true);
+    const ok = await deductCoins(lockTarget.unlockCostCoins);
+    setUnlockBusy(false);
+    if (!ok) {
+      setLockTarget(null);
+      setRechargeModalVisible(true);
+      return;
+    }
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {}
+    const url = lockTarget.url;
+    const id = lockTarget.id;
+    setLockTarget(null);
+    setUnlockedLocked((prev) => new Set(prev).add(id));
+    setSelectedPhoto(url);
+  };
 
   const handleSelectPhoto = (uri: string) => {
     if (uri === selectedPhoto) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (e) { }
+    } catch (e) {}
     setSelectedPhoto(uri);
   };
 
@@ -85,7 +138,8 @@ export default function UserProfileDetail1to1() {
 
   useEffect(() => {
     return () => {
-      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+      if (celebrationTimerRef.current)
+        clearTimeout(celebrationTimerRef.current);
     };
   }, []);
 
@@ -117,7 +171,7 @@ export default function UserProfileDetail1to1() {
     setIsClosing(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (e) { }
+    } catch (e) {}
 
     // Close animation: Fade out from top to bottom
     Animated.parallel([
@@ -149,18 +203,27 @@ export default function UserProfileDetail1to1() {
       handleClose();
       return true;
     };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [isClosing]);
 
   // Handle gift sent animation
-  const handleGiftSent = (gift: { name: string; icon: string; emoji?: string; coins: number; accentColor?: string }) => {
+  const handleGiftSent = (gift: {
+    name: string;
+    icon: string;
+    emoji?: string;
+    coins: number;
+    accentColor?: string;
+  }) => {
     // Determine visual details
-    const matched = VIRTUAL_GIFTS.find(g => g.name.toLowerCase() === gift.name.toLowerCase()) || VIRTUAL_GIFTS[0];
+    const matched =
+      VIRTUAL_GIFTS.find(
+        (g) => g.name.toLowerCase() === gift.name.toLowerCase(),
+      ) || VIRTUAL_GIFTS[0];
     const giftName = gift.name || matched.name;
-    const giftEmoji = gift.emoji || matched.emoji || '🎁';
+    const giftEmoji = gift.emoji || matched.emoji || "🎁";
     const giftCoins = gift.coins || matched.coins;
-    const giftColor = gift.accentColor || matched.accentColor || '#F65592';
+    const giftColor = gift.accentColor || matched.accentColor || "#F65592";
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -233,7 +296,7 @@ export default function UserProfileDetail1to1() {
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: '#000', opacity: backdropOpacity },
+          { backgroundColor: "#000", opacity: backdropOpacity },
         ]}
       />
 
@@ -255,7 +318,7 @@ export default function UserProfileDetail1to1() {
           <Text
             style={[
               styles.topNavTitle,
-              { color: isDark ? '#FFFFFF' : '#191C1D' },
+              { color: isDark ? "#FFFFFF" : "#191C1D" },
             ]}
           >
             Near You
@@ -279,14 +342,21 @@ export default function UserProfileDetail1to1() {
           {/* Borderless Rounded Profile Card */}
           <View style={styles.profileCard}>
             {/* Model Image - Wrapped in BlurTargetView with native hardware-accelerated cross-dissolve */}
-            <BlurTargetView ref={imageTargetRef} style={StyleSheet.absoluteFill}>
+            <BlurTargetView
+              ref={imageTargetRef}
+              style={StyleSheet.absoluteFill}
+            >
               <ExpoImage
                 source={{ uri: selectedPhoto }}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="high"
-                transition={{ duration: 350, effect: 'cross-dissolve', timing: 'ease-in-out' }}
+                transition={{
+                  duration: 350,
+                  effect: "cross-dissolve",
+                  timing: "ease-in-out",
+                }}
               />
             </BlurTargetView>
 
@@ -294,11 +364,11 @@ export default function UserProfileDetail1to1() {
             <View
               style={[
                 styles.cardStatusBadge,
-                { backgroundColor: profile.isOnline ? '#10B981' : '#E11D48' },
+                { backgroundColor: profile.isOnline ? "#10B981" : "#E11D48" },
               ]}
             >
               <Text style={styles.cardStatusText}>
-                {profile.isOnline ? 'Online' : 'Busy'}
+                {profile.isOnline ? "Online" : "Busy"}
               </Text>
             </View>
 
@@ -306,13 +376,15 @@ export default function UserProfileDetail1to1() {
             {/* absolute bottom-0 w-full p-6 glass-overlay z-10 flex flex-col justify-end text-white */}
             <View style={styles.glassOverlayWrap}>
               {/* Native Rich Frosted Blur Fading from Bottom to Top matching the LinearGradient */}
-              {Platform.OS === 'web' ? (
+              {Platform.OS === "web" ? (
                 <View
                   style={[
                     StyleSheet.absoluteFill,
                     {
-                      WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.45) 60%, transparent 100%)',
-                      maskImage: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.45) 60%, transparent 100%)',
+                      WebkitMaskImage:
+                        "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.45) 60%, transparent 100%)",
+                      maskImage:
+                        "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.45) 60%, transparent 100%)",
                     } as any,
                   ]}
                 >
@@ -322,7 +394,10 @@ export default function UserProfileDetail1to1() {
                     tint="dark"
                     style={[
                       StyleSheet.absoluteFill,
-                      { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } as any,
+                      {
+                        backdropFilter: "blur(16px)",
+                        WebkitBackdropFilter: "blur(16px)",
+                      } as any,
                     ]}
                   />
                 </View>
@@ -331,7 +406,11 @@ export default function UserProfileDetail1to1() {
                   style={StyleSheet.absoluteFill}
                   maskElement={
                     <LinearGradient
-                      colors={['rgba(0,0,0,1)', 'rgba(0,0,0,0.45)', 'transparent']}
+                      colors={[
+                        "rgba(0,0,0,1)",
+                        "rgba(0,0,0,0.45)",
+                        "transparent",
+                      ]}
                       locations={[0, 0.6, 1]}
                       start={{ x: 0, y: 1 }}
                       end={{ x: 0, y: 0 }}
@@ -352,7 +431,11 @@ export default function UserProfileDetail1to1() {
 
               {/* background: linear-gradient(to top, rgba(234, 76, 137, 0.9) 0%, rgba(234, 76, 137, 0.4) 60%, transparent 100%) */}
               <LinearGradient
-                colors={['rgba(234, 76, 137, 0.9)', 'rgba(234, 76, 137, 0.4)', 'transparent']}
+                colors={[
+                  "rgba(234, 76, 137, 0.9)",
+                  "rgba(234, 76, 137, 0.4)",
+                  "transparent",
+                ]}
                 locations={[0, 0.6, 1]}
                 start={{ x: 0, y: 1 }}
                 end={{ x: 0, y: 0 }}
@@ -364,8 +447,14 @@ export default function UserProfileDetail1to1() {
                 {/* Name, Age & Location (Categories/Badges removed as requested) */}
                 <View style={styles.metaRow}>
                   <View style={styles.metaInfoLeft}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={[styles.nameHeading, { flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <Text
+                        style={[styles.nameHeading, { flexShrink: 1 }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
                         {profile.name}
                       </Text>
                       <Text style={[styles.nameHeading, { flexShrink: 0 }]}>
@@ -376,7 +465,11 @@ export default function UserProfileDetail1to1() {
                     <View style={styles.statusLocationLine}>
                       {/* Location */}
                       <View style={styles.locationBadge}>
-                        <Ionicons name="location-sharp" size={15} color="#FFF" />
+                        <Ionicons
+                          name="location-sharp"
+                          size={15}
+                          color="#FFF"
+                        />
                         <Text style={styles.locationLabel}>
                           {profile.city}, {profile.country}
                         </Text>
@@ -397,35 +490,92 @@ export default function UserProfileDetail1to1() {
         {/* END: Main Content Area */}
 
         {/* BEGIN: Horizontal List of Images Above Bottom 3 Options */}
-        <View style={[styles.thumbnailGalleryWrap, { bottom: Math.max(insets.bottom, 16) + 84 }]}>
+        <View
+          style={[
+            styles.thumbnailGalleryWrap,
+            { bottom: Math.max(insets.bottom, 16) + 84 },
+          ]}
+        >
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.thumbnailScrollContent}
           >
-            {photoList.map((uri, idx) => {
+            {galleryItems.map((g, idx) => {
+              if (g.kind === 'locked' && !unlockedLocked.has(g.item.id)) {
+                const item = g.item;
+                return (
+                  <TouchableOpacity
+                    key={`locked-${item.id}`}
+                    style={[styles.thumbnailItem, styles.thumbnailItemInactive]}
+                    onPress={() => {
+                      if (isVip) {
+                        try {
+                          Haptics.notificationAsync(
+                            Haptics.NotificationFeedbackType.Success,
+                          );
+                        } catch (e) {}
+                        setUnlockedLocked((prev) => new Set(prev).add(item.id));
+                        setSelectedPhoto(item.url);
+                      } else {
+                        setLockTarget(item);
+                      }
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Image
+                      source={{ uri: item.url }}
+                      style={styles.thumbnailImg}
+                      resizeMode="cover"
+                      blurRadius={14}
+                    />
+                    <View style={styles.lockedThumbOverlay}>
+                      <Ionicons
+                        name={isVip ? "sparkles" : "lock-closed"}
+                        size={16}
+                        color={isVip ? "#FFD700" : "#FFFFFF"}
+                      />
+                      <View
+                        style={[
+                          styles.lockedPricePill,
+                          isVip && {
+                            backgroundColor: "rgba(255, 215, 0, 0.92)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.lockedPriceText,
+                            isVip && { color: "#1A1A1A", fontWeight: "800" },
+                          ]}
+                        >
+                          {isVip ? "VIP" : item.unlockCostCoins}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }
+              const uri = g.kind === 'locked' ? g.item.url : g.uri;
               const isSelected = selectedPhoto === uri;
               return (
                 <TouchableOpacity
                   key={idx}
-                  style={styles.thumbnailItem}
+                  style={[
+                    styles.thumbnailItem,
+                    isSelected
+                      ? styles.thumbnailItemActive
+                      : styles.thumbnailItemInactive,
+                  ]}
                   onPress={() => handleSelectPhoto(uri)}
                   activeOpacity={0.85}
                 >
-                  <View
-                    style={[
-                      StyleSheet.absoluteFill,
-                      isSelected ? styles.thumbnailItemActive : styles.thumbnailItemInactive,
-                    ]}
-                  >
-                    <ExpoImage
-                      source={{ uri }}
-                      style={styles.thumbnailImg}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  </View>
-                  {isSelected && <View style={styles.thumbnailActiveDot} />}
+                  <ExpoImage
+                    source={{ uri }}
+                    style={styles.thumbnailImg}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 </TouchableOpacity>
               );
             })}
@@ -434,7 +584,12 @@ export default function UserProfileDetail1to1() {
         {/* END: Horizontal List of Images */}
 
         {/* BEGIN: Primary Action Row: Chat | Video Call (Center Glow) | Gift */}
-        <View style={[styles.primaryActionRow, { bottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View
+          style={[
+            styles.primaryActionRow,
+            { bottom: Math.max(insets.bottom, 16) + 12 },
+          ]}
+        >
           {/* Chat Button (Left) */}
           <View style={styles.actionBtnShadow}>
             <TouchableOpacity
@@ -449,30 +604,47 @@ export default function UserProfileDetail1to1() {
                   styles.actionBtnBlur,
                   {
                     backgroundColor: isDark
-                      ? 'rgba(28, 18, 22, 0.50)'
-                      : 'rgba(255, 255, 255, 0.85)',
+                      ? "rgba(28, 18, 22, 0.50)"
+                      : "rgba(255, 255, 255, 0.85)",
                   },
                 ]}
-                tint={isDark ? 'dark' : 'light'}
+                tint={isDark ? "dark" : "light"}
               >
                 <Ionicons
                   name="chatbubble"
                   size={24}
-                  color={isDark ? '#FFFFFF' : '#191C1D'}
+                  color={isDark ? "#FFFFFF" : "#191C1D"}
                 />
               </AppBlurView>
             </TouchableOpacity>
           </View>
 
           {/* Video Call Button (Center - Prominent Neon Glow Button) */}
-          <TouchableOpacity
-            style={styles.centerCallBtn}
-            onPress={() => router.push(`/call/${profile.id}` as any)}
-            activeOpacity={0.9}
-            accessibilityLabel="Video Call"
-          >
-            <Ionicons name="videocam" size={36} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* The ONLY place in the app that shows the coins-per-min rate */}
+          <View style={styles.centerCallWrap}>
+            <TouchableOpacity
+              style={styles.centerCallBtn}
+              onPress={() => {
+                if (coins < profile.callRate) {
+                  setCallLowBalanceVisible(true);
+                  return;
+                }
+                router.push(`/call/${profile.id}` as any);
+              }}
+              activeOpacity={0.9}
+              accessibilityLabel="Video Call"
+            >
+              <Ionicons name="videocam" size={36} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text
+              style={[
+                styles.centerCallRate,
+                { color: isDark ? "rgba(255, 255, 255, 0.9)" : "#191C1D" },
+              ]}
+            >
+              {profile.callRate} Coins / Min
+            </Text>
+          </View>
 
           {/* Gift Button (Right) */}
           <View style={styles.actionBtnShadow}>
@@ -488,16 +660,16 @@ export default function UserProfileDetail1to1() {
                   styles.actionBtnBlur,
                   {
                     backgroundColor: isDark
-                      ? 'rgba(28, 18, 22, 0.50)'
-                      : 'rgba(255, 255, 255, 0.85)',
+                      ? "rgba(28, 18, 22, 0.50)"
+                      : "rgba(255, 255, 255, 0.85)",
                   },
                 ]}
-                tint={isDark ? 'dark' : 'light'}
+                tint={isDark ? "dark" : "light"}
               >
                 <Ionicons
                   name="gift"
                   size={24}
-                  color={isDark ? '#FFFFFF' : '#191C1D'}
+                  color={isDark ? "#FFFFFF" : "#191C1D"}
                 />
               </AppBlurView>
             </TouchableOpacity>
@@ -540,7 +712,7 @@ export default function UserProfileDetail1to1() {
                       {
                         rotate: giftTravelAnim.interpolate({
                           inputRange: [0, 0.4, 0.8, 1],
-                          outputRange: ['-12deg', '10deg', '-4deg', '0deg'],
+                          outputRange: ["-12deg", "10deg", "-4deg", "0deg"],
                         }),
                       },
                     ],
@@ -550,8 +722,8 @@ export default function UserProfileDetail1to1() {
                 {/* STAGE 2: Gift box bursts open & fades out when opening */}
                 <Animated.View
                   style={{
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    alignItems: "center",
+                    justifyContent: "center",
                     transform: [
                       {
                         scale: boxOpenAnim.interpolate({
@@ -603,11 +775,13 @@ export default function UserProfileDetail1to1() {
                     {
                       backgroundColor: activeCelebration.accentColor
                         ? `${activeCelebration.accentColor}40`
-                        : 'rgba(246, 85, 146, 0.40)',
+                        : "rgba(246, 85, 146, 0.40)",
                     },
                   ]}
                 />
-                <Text style={styles.justTheGiftEmoji}>{activeCelebration.emoji}</Text>
+                <Text style={styles.justTheGiftEmoji}>
+                  {activeCelebration.emoji}
+                </Text>
               </Animated.View>
             </Animated.View>
           </View>
@@ -625,6 +799,57 @@ export default function UserProfileDetail1to1() {
           visible={rechargeModalVisible}
           onClose={() => setRechargeModalVisible(false)}
         />
+
+        {/* Low Balance Video Call Notice */}
+        <AppModal
+          visible={callLowBalanceVisible}
+          onClose={() => setCallLowBalanceVisible(false)}
+          title="Insufficient Coins"
+          description={`${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`}
+          icon="videocam-outline"
+          primaryAction={{
+            label: "Recharge Now",
+            onPress: () => {
+              setCallLowBalanceVisible(false);
+              setRechargeModalVisible(true);
+            },
+          }}
+          secondaryAction={{
+            label: "Cancel",
+            onPress: () => setCallLowBalanceVisible(false),
+          }}
+        />
+
+        {/* Locked gallery photo unlock (same consent flow as chat) */}
+        <AppModal
+          visible={!!lockTarget}
+          onClose={() => {
+            if (!unlockBusy) setLockTarget(null);
+          }}
+          title={isVip ? "Unlock VIP Photo" : "Unlock this photo?"}
+          description={
+            lockTarget
+              ? isVip
+                ? `${lockTarget.caption ?? 'Her exclusive photo.'}\n\nIncluded free with your VIP Membership.`
+                : `${lockTarget.caption ?? 'Her exclusive photo.'}\n\n${lockTarget.unlockCostCoins} coins will be deducted (you have ${coins}).`
+              : undefined
+          }
+          icon={isVip ? "sparkles" : "lock-closed-outline"}
+          primaryAction={{
+            label: unlockBusy
+              ? 'Unlocking...'
+              : isVip
+              ? 'Unlock Free (VIP)'
+              : `Unlock · ${lockTarget?.unlockCostCoins ?? 30} coins`,
+            onPress: handleUnlockConfirm,
+          }}
+          secondaryAction={{
+            label: 'Cancel',
+            onPress: () => {
+              if (!unlockBusy) setLockTarget(null);
+            },
+          }}
+        />
       </Animated.View>
     </View>
   );
@@ -633,26 +858,26 @@ export default function UserProfileDetail1to1() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1114',
+    backgroundColor: "#1A1114",
   },
   // TopAppBar
   topHeaderBar: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 10,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   topNavTitle: {
-    color: '#F1E0E4',
+    color: "#F1E0E4",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.2,
   },
   // Main Content Area
@@ -665,35 +890,35 @@ const styles = StyleSheet.create({
   profileCard: {
     flex: 1,
     borderRadius: 32,
-    overflow: 'hidden',
-    backgroundColor: '#271D20',
-    position: 'relative',
+    overflow: "hidden",
+    backgroundColor: "#271D20",
+    position: "relative",
   },
   // Status Badge on Top Right of Card
   cardStatusBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: 16,
     right: 16,
     zIndex: 25,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardStatusText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.3,
   },
   // Gradient + Glass effect overlay directly at the bottom of the card
   glassOverlayWrap: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     zIndex: 10,
@@ -702,14 +927,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, // p-6
     paddingTop: 48,
     paddingBottom: 20,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     gap: 10,
   },
   // Name & Age Row
   metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
   },
   metaInfoLeft: {
     flex: 1,
@@ -717,112 +942,125 @@ const styles = StyleSheet.create({
   },
   nameHeading: {
     fontSize: 26,
-    fontWeight: '800',
-    color: '#FFF',
+    fontWeight: "800",
+    color: "#FFF",
     letterSpacing: -0.4,
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowColor: "rgba(0, 0, 0, 0.6)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   statusLocationLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
     marginTop: 2,
   },
   onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
   },
   onlineGreenDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#4ADE80',
+    backgroundColor: "#4ADE80",
   },
   onlineLabel: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
   },
   locationLabel: {
-    color: 'rgba(255, 255, 255, 0.92)',
+    color: "rgba(255, 255, 255, 0.92)",
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: "400",
   },
   // Bio (text-sm text-white/90 leading-relaxed font-light)
   bioText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.88)',
+    color: "rgba(255, 255, 255, 0.88)",
     lineHeight: 18,
-    fontWeight: '300',
+    fontWeight: "300",
   },
   // Thumbnail Gallery List Above Action Row
   thumbnailGalleryWrap: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     zIndex: 35,
     paddingVertical: 6,
-    marginBottom: 10
+    marginBottom: 10,
   },
   thumbnailScrollContent: {
     paddingHorizontal: 20,
     gap: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   thumbnailItem: {
     width: 52,
     height: 66,
     borderRadius: 14,
-    overflow: 'visible',
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    overflow: "hidden",
+    backgroundColor: "#1E1418",
+    alignItems: "center",
+    justifyContent: "center",
   },
   thumbnailItemActive: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#1E1418',
     opacity: 1,
+    borderWidth: 2.5,
+    borderColor: "#F65592",
   },
   thumbnailItemInactive: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#1E1418',
     opacity: 0.5,
-  },
-  thumbnailActiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F65592',
-    marginTop: 4,
+    borderWidth: 2.5,
+    borderColor: "transparent",
   },
   thumbnailImg: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
+  },
+  lockedThumbOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.25)",
+  },
+  lockedPricePill: {
+    marginTop: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: "#F65592",
+  },
+  lockedPriceText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
   },
   // Primary Action Row: Chat | Video Call (Center Glow) | Gift
   primaryActionRow: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 22,
     zIndex: 40,
   },
   actionBtnShadow: {
     borderRadius: 30,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.22,
     shadowRadius: 8,
@@ -832,70 +1070,91 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   actionBtnBlur: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Prominent Center Video Call Button with Neon Glow
+  centerCallWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   centerCallBtn: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#ff69b4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    backgroundColor: "#ff69b4",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
     zIndex: 50,
+  },
+  centerCallLabel: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  centerCallRateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  centerCallRate: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
   },
   // Celebration Gift Animation Overlay (Unboxing experience matching video call)
   celebrationOverlay: {
     ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 9999,
     elevation: 9999,
   },
   justTheGiftWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     width: 240,
     height: 240,
   },
   giftBoxLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
     width: 170,
     height: 170,
   },
   giftBoxEmoji: {
     fontSize: 112,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
     textShadowOffset: { width: 0, height: 10 },
     textShadowRadius: 26,
   },
   revealedGiftLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
     width: 230,
     height: 230,
   },
   giftGlowCircle: {
-    position: 'absolute',
+    position: "absolute",
     width: 190,
     height: 190,
     borderRadius: 95,
   },
   justTheGiftEmoji: {
     fontSize: 130,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
     textShadowOffset: { width: 0, height: 10 },
     textShadowRadius: 28,
   },

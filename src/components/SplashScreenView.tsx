@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   StyleSheet,
   Text,
   View,
@@ -16,11 +17,14 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface SplashScreenViewProps {
   isLoading: boolean;
   onFinish: () => void;
+  /** Fired the moment the fade-out begins (overlay still fully opaque). */
+  onFadeStart?: () => void;
 }
 
 export default function SplashScreenView({
   isLoading,
   onFinish,
+  onFadeStart,
 }: SplashScreenViewProps) {
   const { isDark } = useTheme();
 
@@ -150,9 +154,16 @@ export default function SplashScreenView({
     };
   }, []);
 
-  // Dismiss splash smoothly
+  // Dismiss splash smoothly. The destination screen is swapped in FIRST
+  // (behind this still-opaque overlay) so the fade reveals an already
+  // rendered screen instead of flashing an empty one.
+  const fadeStarted = useRef(false);
   useEffect(() => {
-    if (minTimeElapsed && !isLoading) {
+    if (minTimeElapsed && !isLoading && !fadeStarted.current) {
+      fadeStarted.current = true;
+      try {
+        onFadeStart?.();
+      } catch (e) {}
       Animated.timing(containerOpacity, {
         toValue: 0,
         duration: 420,
@@ -258,17 +269,11 @@ export default function SplashScreenView({
             },
           ]}
         >
-          <LinearGradient
-            colors={['#FF2A7A', '#F65592', '#FF70A0']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoGradient}
-          >
-            <Ionicons name="videocam" size={46} color="#FFFFFF" />
-            <View style={styles.floatingHeart}>
-              <Ionicons name="heart" size={20} color="#FFFFFF" />
-            </View>
-          </LinearGradient>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logoImage}
+            resizeMode="cover"
+          />
         </Animated.View>
 
         {/* Title & Seductive Taglines */}
@@ -283,15 +288,15 @@ export default function SplashScreenView({
         >
           <View style={styles.titleRow}>
             <Text style={[styles.brandTitle, { color: isDark ? '#FFFFFF' : '#1F2937' }]}>
-              Dream
+              Bolo
             </Text>
-            <Text style={[styles.brandTitle, styles.brandTitleAccent]}>Date</Text>
+            <Text style={[styles.brandTitle, styles.brandTitleAccent]}>Na</Text>
           </View>
           <Text style={[styles.brandSubtitle, { color: isDark ? '#F65592' : '#E11D48' }]}>
-            1-on-1 Private Live Video Calls
+            Live Video calling & Chat
           </Text>
           <Text style={[styles.brandCaption, { color: isDark ? '#DFBEC6' : '#6B7280' }]}>
-            Connect instantly with beautiful female companions
+            Naye logon se Live Video Chat aur one-to-one Video Call par connect karein.
           </Text>
         </Animated.View>
 
@@ -404,9 +409,10 @@ const styles = StyleSheet.create({
     top: -80,
   },
   logoWrap: {
-    width: 104,
-    height: 104,
-    borderRadius: 34,
+    width: 110,
+    height: 110,
+    borderRadius: 32,
+    overflow: 'hidden',
     shadowColor: '#F65592',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.6,
@@ -414,26 +420,10 @@ const styles = StyleSheet.create({
     elevation: 16,
     marginBottom: 24,
   },
-  logoGradient: {
+  logoImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  floatingHeart: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#E11D48',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderRadius: 32,
   },
   titleCol: {
     alignItems: 'center',

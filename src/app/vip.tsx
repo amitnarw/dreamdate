@@ -29,6 +29,13 @@ interface VipPerk {
 
 const VIP_PERKS: VipPerk[] = [
   {
+    id: 'unlimited-photos',
+    ionIcon: 'images',
+    title: 'Unlimited image unlock',
+    description: 'Instant free access to all private & blurred photos',
+    color: '#38BDF8',
+  },
+  {
     id: 'weekly-coins',
     ionIcon: 'trophy',
     title: '1,500 coins every week',
@@ -125,9 +132,9 @@ export default function VipMembershipScreen() {
               >
                 <Ionicons name="ribbon" size={22} color="#FFD700" />
               </View>
-              <Text style={[styles.title, { color: text }]}>DreamDate VIP</Text>
+              <Text style={[styles.title, { color: text }]}>BoloNa VIP</Text>
               <Text style={[styles.subtitle, { color: subtle }]}>
-                Unlock every companion, weekly coins, and 50% off calls.
+                Unlimited photos, free chat, weekly coins, and 50% off calls.
               </Text>
             </View>
 
@@ -163,7 +170,7 @@ export default function VipMembershipScreen() {
                 <View style={styles.priceWrap}>
                   <Text style={[styles.struck, { color: subtle }]}>₹999</Text>
                   <Text style={[styles.price, { color: text }]}>
-                    ₹500<Text style={[styles.priceUnit, { color: subtle }]}> / week</Text>
+                    ₹499<Text style={[styles.priceUnit, { color: subtle }]}> / week</Text>
                   </Text>
                 </View>
                 <View style={styles.priceMeta}>
@@ -233,7 +240,7 @@ export default function VipMembershipScreen() {
               style={{ marginRight: 8 }}
             />
             <Text style={styles.buyBtnText}>
-              {isVip ? 'Renew VIP · ₹500 / week' : 'Unlock VIP · ₹500 / week'}
+              {isVip ? 'Renew VIP · ₹499 / week' : 'Unlock VIP · ₹499 / week'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -252,7 +259,7 @@ export default function VipMembershipScreen() {
           useModalHost={false}
           onClose={() => setVipSuccessModal(false)}
           title="VIP Activated"
-          description="1,500 coins have been added to your wallet. All VIP privileges are now live."
+          description="1,500 coins added. Unlimited photo unlocks, free chat, and all VIP privileges are now live."
           icon="ribbon"
           iconColor="#FFD700"
           primaryAction={{

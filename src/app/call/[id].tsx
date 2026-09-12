@@ -1,17 +1,21 @@
-import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import {
+  CameraView,
+  useCameraPermissions,
+  useMicrophonePermissions,
+} from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { useEventListener } from "expo";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -19,33 +23,41 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AppBackground from '../../components/AppBackground';
-import AppBlurView from '../../components/AppBlurView';
-import AppModal from '../../components/AppModal';
-import CoinIcon from '../../components/CoinIcon';
-import GiftModal from '../../components/GiftModal';
-import RechargeModal from '../../components/RechargeModal';
-import { useTheme } from '../../context/ThemeContext';
-import { StitchTheme } from '../../constants/theme';
-import { FAKE_CALL_VIDEOS, MOCK_PROFILES, Profile, VIRTUAL_GIFTS, findGiftVisual } from '../../data/mockProfiles';
+  View
+} from "react-native";
 import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import AppBackground from "../../components/AppBackground";
+import AppBlurView from "../../components/AppBlurView";
+import AppModal from "../../components/AppModal";
+import CoinIcon from "../../components/CoinIcon";
+import GiftModal from "../../components/GiftModal";
+import RechargeModal from "../../components/RechargeModal";
+import { useTheme } from "../../context/ThemeContext";
+import {
+  FAKE_CALL_VIDEOS,
+  MOCK_PROFILES,
+  Profile,
+  VIRTUAL_GIFTS
+} from "../../data/mockProfiles";
+import { saveCallLog } from "../../services/callHistoryService";
+import {
+  ChatMessage,
   generatePostCallFollowUp,
   saveChatHistory,
-  ChatMessage,
-} from '../../services/chatEngine';
-import { saveCallLog } from '../../services/callHistoryService';
+} from "../../services/chatEngine";
 import {
   markCallFunnelFired,
   schedulePostDepletionReminder,
-} from '../../services/engagementService';
-import { deductCoins, useWallet } from '../../services/wallet';
+} from "../../services/engagementService";
+import { deductCoins, getCoins, useWallet } from "../../services/wallet";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-type CallState = 'ringing' | 'connected' | 'ended';
+type CallState = "ringing" | "connecting" | "connected" | "ended";
+type CallDirection = "outgoing" | "incoming";
 
 interface FloatingItem {
   id: string;
@@ -75,60 +87,98 @@ interface ActiveGiftCelebration {
 }
 
 const CELEBRATION_PARTICLES = [
-  { id: 1, char: '✨', angle: 0, distance: 165 },
-  { id: 2, char: '💖', angle: 30, distance: 195 },
-  { id: 3, char: '⭐', angle: 60, distance: 175 },
-  { id: 4, char: '💎', angle: 90, distance: 190 },
-  { id: 5, char: '🌟', angle: 120, distance: 170 },
-  { id: 6, char: '✨', angle: 150, distance: 205 },
-  { id: 7, char: '🔥', angle: 180, distance: 175 },
-  { id: 8, char: '💖', angle: 210, distance: 195 },
-  { id: 9, char: '⭐', angle: 240, distance: 170 },
-  { id: 10, char: '💎', angle: 270, distance: 205 },
-  { id: 11, char: '🌟', angle: 300, distance: 175 },
-  { id: 12, char: '✨', angle: 330, distance: 190 },
+  { id: 1, char: "✨", angle: 0, distance: 165 },
+  { id: 2, char: "💖", angle: 30, distance: 195 },
+  { id: 3, char: "⭐", angle: 60, distance: 175 },
+  { id: 4, char: "💎", angle: 90, distance: 190 },
+  { id: 5, char: "🌟", angle: 120, distance: 170 },
+  { id: 6, char: "✨", angle: 150, distance: 205 },
+  { id: 7, char: "🔥", angle: 180, distance: 175 },
+  { id: 8, char: "💖", angle: 210, distance: 195 },
+  { id: 9, char: "⭐", angle: 240, distance: 170 },
+  { id: 10, char: "💎", angle: 270, distance: 205 },
+  { id: 11, char: "🌟", angle: 300, distance: 175 },
+  { id: 12, char: "✨", angle: 330, distance: 190 },
 ];
 
-const EMOJI_REACTIONS = ['❤️', '🔥', '👏', '😍', '🎉', '🌹', '✨', '😘', '🥰', '💖'];
+const EMOJI_REACTIONS = [
+  "❤️",
+  "🔥",
+  "👏",
+  "😍",
+  "🎉",
+  "🌹",
+  "✨",
+  "😘",
+  "🥰",
+  "💖",
+];
 
 export default function VideoCallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const profile: Profile = MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
+  const { id, dir } = useLocalSearchParams<{ id: string; dir?: string }>();
+  const profile: Profile =
+    MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
   const { theme, isDark } = useTheme();
 
+  // Incoming = she called you (accepted from the overlay). Outgoing = you
+  // dialed her. The two flows look and behave differently below.
+  const direction: CallDirection = dir === "incoming" ? "incoming" : "outgoing";
+
   const { coins } = useWallet();
-  const [callState, setCallState] = useState<CallState>('ringing');
+  // Incoming calls skip the dial-out ringing phase entirely: you already
+  // picked up, so we go straight to a brief "connecting" beat.
+  const [callState, setCallState] = useState<CallState>(
+    direction === "incoming" ? "connecting" : "ringing",
+  );
   const [callSeconds, setCallSeconds] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
+  const [cameraFacing, setCameraFacing] = useState<"front" | "back">("front");
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [coinsDepletedModalVisible, setCoinsDepletedModalVisible] = useState(false);
+  const [coinsDepletedModalVisible, setCoinsDepletedModalVisible] =
+    useState(false);
+  const [inCallRechargeAlertVisible, setInCallRechargeAlertVisible] =
+    useState(false);
+  const [inCallGraceSeconds, setInCallGraceSeconds] = useState(20);
+  const [disconnectReason, setDisconnectReason] = useState<
+    "user_ended" | "coins_depleted" | "insufficient_coins" | null
+  >(null);
+  const initialMinuteDeductedRef = useRef(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [selectedModalPhoto, setSelectedModalPhoto] = useState<string | null>(null);
+  const [selectedModalPhoto, setSelectedModalPhoto] = useState<string | null>(
+    null,
+  );
   const [floatingGifts, setFloatingGifts] = useState<FloatingItem[]>([]);
-  const [chatText, setChatText] = useState('');
+  const [chatText, setChatText] = useState("");
   const [centerMessages, setCenterMessages] = useState<CenterChatMessage[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
-      }
+      },
     );
     const hideSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
         setKeyboardHeight(0);
-      }
+      },
     );
     // Mark missed-call funnel as fired once user enters a call screen
     markCallFunnelFired().catch(() => {});
+
+    // Guard: Outgoing calls require at least 1 minute of coins
+    if (direction === "outgoing" && coins < profile.callRate) {
+      setDisconnectReason("insufficient_coins");
+      setCallState("ended");
+      setCoinsDepletedModalVisible(true);
+    }
+
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -144,11 +194,12 @@ export default function VideoCallScreen() {
   const sonar3 = useRef(new Animated.Value(0)).current;
 
   // Gift Unboxing & Travel Animations (Goes from bottom to center, opens to reveal gift)
-  const [activeCelebration, setActiveCelebration] = useState<ActiveGiftCelebration | null>(null);
+  const [activeCelebration, setActiveCelebration] =
+    useState<ActiveGiftCelebration | null>(null);
   const giftTravelAnim = useRef(new Animated.Value(0)).current; // 0 (bottom) -> 1 (center)
-  const boxOpenAnim = useRef(new Animated.Value(0)).current;    // 0 (closed) -> 1 (bursts open)
+  const boxOpenAnim = useRef(new Animated.Value(0)).current; // 0 (closed) -> 1 (bursts open)
   const giftRevealAnim = useRef(new Animated.Value(0)).current; // 0 (hidden) -> 1 (revealed & scaled)
-  const giftExitAnim = useRef(new Animated.Value(1)).current;   // 1 (visible) -> 0 (fade exit)
+  const giftExitAnim = useRef(new Animated.Value(1)).current; // 1 (visible) -> 0 (fade exit)
   const comboCountRef = useRef(1);
   const celebrationTimerRef = useRef<any>(null);
   const glitchTimerRef = useRef<any>(null);
@@ -161,6 +212,13 @@ export default function VideoCallScreen() {
     p.muted = false;
   });
 
+  // Guarantee endless looping across all devices & ExoPlayer states
+  useEventListener(player, "playToEnd", () => {
+    try {
+      player.replay();
+    } catch (e) {}
+  });
+
   // Camera + microphone permissions
   useEffect(() => {
     if (!permission?.granted) {
@@ -171,14 +229,45 @@ export default function VideoCallScreen() {
     }
   }, [permission, micPermission]);
 
+  // Incoming path: she already rang and you accepted, so there is no
+  // dial-out phase. Just a brief "connecting" beat, then live.
+  useEffect(() => {
+    if (callState !== "connecting") return;
+    const ms = 1500 + Math.floor(Math.random() * 1000);
+    const timer = setTimeout(() => {
+      setCallState("connected");
+      try {
+        player.play();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {}
+
+      // One random brief "reconnecting" glitch ~45–75s into the call
+      const glitchAt = 45_000 + Math.floor(Math.random() * 30_000);
+      glitchTimerRef.current = setTimeout(() => {
+        try {
+          player.pause();
+        } catch (e) {}
+        setReconnecting(true);
+        setTimeout(() => {
+          try {
+            player.play();
+          } catch (e) {}
+          setReconnecting(false);
+        }, 850);
+      }, glitchAt);
+    }, ms);
+    return () => clearTimeout(timer);
+  }, [callState]);
+
   // Ringing phase logic with Radar Sonar Waves & Encrypted Stream setup
+  // (outgoing only ,  incoming starts at 'connecting' above)
   useEffect(() => {
     let timer: any;
     let s1Anim: Animated.CompositeAnimation;
     let s2Anim: Animated.CompositeAnimation;
     let s3Anim: Animated.CompositeAnimation;
 
-    if (callState === 'ringing') {
+    if (callState === "ringing") {
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } catch (e) {}
@@ -195,7 +284,7 @@ export default function VideoCallScreen() {
             duration: 750,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       const createSonar = (anim: Animated.Value, delay: number) => {
@@ -212,7 +301,7 @@ export default function VideoCallScreen() {
               duration: 0,
               useNativeDriver: true,
             }),
-          ])
+          ]),
         );
       };
 
@@ -223,10 +312,10 @@ export default function VideoCallScreen() {
       s2Anim.start();
       s3Anim.start();
 
-      // Variable ring duration 1.8–4.0s — feels less robotic than fixed 2.6s
+      // Variable ring duration 1.8–4.0s ,  feels less robotic than fixed 2.6s
       const ringMs = 1800 + Math.floor(Math.random() * 2200);
       timer = setTimeout(() => {
-        setCallState('connected');
+        setCallState("connected");
         try {
           player.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -259,21 +348,40 @@ export default function VideoCallScreen() {
   // Timer & Coin deduction
   useEffect(() => {
     let interval: any;
-    if (callState === 'connected') {
+    if (callState === "connected" && !inCallRechargeAlertVisible) {
+      // Deduct 1st minute immediately upon connection for all calls
+      if (!initialMinuteDeductedRef.current) {
+        initialMinuteDeductedRef.current = true;
+        deductCoins(profile.callRate).then((success) => {
+          if (!success) {
+            handleEndCall("insufficient_coins");
+            setCoinsDepletedModalVisible(true);
+            schedulePostDepletionReminder(profile.name).catch(() => {});
+          }
+        });
+      }
+
       interval = setInterval(async () => {
         setCallSeconds((prev) => {
           const next = prev + 1;
-          // First 2 minutes (FREE_WINDOW_SECONDS) = no coin deduction
-          const FREE_WINDOW_SECONDS = 120;
-          if (next > 0 && next % 60 === 0 && next > FREE_WINDOW_SECONDS) {
-            deductCoins(profile.callRate).then((success) => {
-              if (!success) {
-                handleEndCall();
-                setCoinsDepletedModalVisible(true);
-                schedulePostDepletionReminder(profile.name).catch(() => {});
-              }
-            });
+
+          // Deduct next minute at each 60s boundary
+          const isCheckPoint = next > 0 && next % 60 === 0;
+
+          if (isCheckPoint) {
+            const currentBal = getCoins();
+            if (currentBal < profile.callRate) {
+              // Not enough coins for upcoming minute!
+              try {
+                player.pause();
+              } catch (e) {}
+              setInCallRechargeAlertVisible(true);
+              setInCallGraceSeconds(20);
+            } else {
+              deductCoins(profile.callRate);
+            }
           }
+
           return next;
         });
       }, 1000);
@@ -287,13 +395,50 @@ export default function VideoCallScreen() {
       if (glitchTimerRef.current) clearTimeout(glitchTimerRef.current);
       if (followUpTimerRef.current) clearTimeout(followUpTimerRef.current);
     };
-  }, [callState, profile.callRate, profile.name]);
+  }, [
+    callState,
+    direction,
+    profile.callRate,
+    profile.name,
+    inCallRechargeAlertVisible,
+  ]);
 
-  const handleEndCall = () => {
+  // In-call recharge prompt grace countdown (paused if user is actively in recharge sheet)
+  useEffect(() => {
+    let graceTimer: any;
+    if (
+      inCallRechargeAlertVisible &&
+      callState === "connected" &&
+      !rechargeModalVisible
+    ) {
+      graceTimer = setInterval(() => {
+        setInCallGraceSeconds((prev) => {
+          if (prev <= 1) {
+            setInCallRechargeAlertVisible(false);
+            handleEndCall("coins_depleted");
+            schedulePostDepletionReminder(profile.name).catch(() => {});
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (graceTimer) clearInterval(graceTimer);
+    };
+  }, [inCallRechargeAlertVisible, callState, profile.name, rechargeModalVisible]);
+
+  const handleEndCall = (
+    reason:
+      | "user_ended"
+      | "coins_depleted"
+      | "insufficient_coins" = "user_ended",
+  ) => {
+    setDisconnectReason(reason);
     try {
       player.pause();
     } catch (e) {}
-    setCallState('ended');
+    setCallState("ended");
 
     const durationMins = callSeconds > 0 ? Math.ceil(callSeconds / 60) : 0;
     const coinsSpent = durationMins * profile.callRate;
@@ -302,7 +447,7 @@ export default function VideoCallScreen() {
       name: profile.name,
       avatar: profile.avatar,
       city: profile.city,
-      type: 'outgoing',
+      type: direction,
       durationSeconds: callSeconds,
       coinsSpent: coinsSpent,
     });
@@ -314,15 +459,17 @@ export default function VideoCallScreen() {
         try {
           const text = generatePostCallFollowUp(profile, callSeconds);
           const newMsg: ChatMessage = {
-            id: 'msg-followup-' + Date.now(),
-            sender: 'profile',
+            id: "msg-followup-" + Date.now(),
+            sender: "profile",
             text,
             timestamp: Date.now(),
-            status: 'delivered',
+            status: "delivered",
           };
           // Read existing history (or empty)
-          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-          const key = '@dreamdate_chat_history_v5_' + profile.id;
+          const AsyncStorage = (
+            await import("@react-native-async-storage/async-storage")
+          ).default;
+          const key = "@dreamdate_chat_history_v5_" + profile.id;
           const raw = await AsyncStorage.getItem(key);
           const history: ChatMessage[] = raw ? JSON.parse(raw) : [];
           history.push(newMsg);
@@ -339,16 +486,16 @@ export default function VideoCallScreen() {
         (g) =>
           g.name === gift.name ||
           g.id === (gift as any).id ||
-          (gift.emoji && g.emoji === gift.emoji)
-      ) ||
-      (gift.name ? gift : VIRTUAL_GIFTS[0]);
+          (gift.emoji && g.emoji === gift.emoji),
+      ) || (gift.name ? gift : VIRTUAL_GIFTS[0]);
 
-    const giftName = matched.name || gift.name || 'Gift';
-    const giftEmoji = matched.emoji || gift.emoji || '🎁';
+    const giftName = matched.name || gift.name || "Gift";
+    const giftEmoji = matched.emoji || gift.emoji || "🎁";
     const giftImage = matched.image || gift.image || VIRTUAL_GIFTS[0].image;
     const giftCoins = matched.coins || gift.coins || 10;
-    const giftColor = matched.accentColor || gift.accentColor || '#F65592';
-    const giftGlow = matched.glowColor || gift.glowColor || 'rgba(246, 85, 146, 0.4)';
+    const giftColor = matched.accentColor || gift.accentColor || "#F65592";
+    const giftGlow =
+      matched.glowColor || gift.glowColor || "rgba(246, 85, 146, 0.4)";
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -369,7 +516,7 @@ export default function VideoCallScreen() {
       emoji: giftEmoji,
       image: giftImage,
       coins: giftCoins,
-      category: matched.category || 'Popular',
+      category: matched.category || "Popular",
       accentColor: giftColor,
       glowColor: giftGlow,
       comboCount: currentCombo,
@@ -475,7 +622,7 @@ export default function VideoCallScreen() {
     };
 
     setCenterMessages((prev) => [...prev.slice(-2), newMsg]);
-    setChatText('');
+    setChatText("");
 
     Animated.timing(anim, {
       toValue: 1,
@@ -486,11 +633,10 @@ export default function VideoCallScreen() {
     });
   };
 
-
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
-    return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    return `${m < 10 ? "0" + m : m}:${s < 10 ? "0" + s : s}`;
   };
 
   // -------------------------------------------------------------
@@ -499,20 +645,64 @@ export default function VideoCallScreen() {
   // -------------------------------------------------------------
   // RINGING SCREEN (ADVANCED VIP PRIVATE CONNECTION SCREEN)
   // -------------------------------------------------------------
-  if (callState === 'ringing') {
+  // Incoming only: brief beat between Accept and live. Deliberately NOT
+  // the dial-out sonar screen ,  you picked up, she is already there.
+  if (callState === "connecting") {
     return (
       <View style={styles.ringingContainer}>
-        <Image source={{ uri: profile.avatar }} style={StyleSheet.absoluteFill} blurRadius={38} />
+        <Image
+          source={{ uri: profile.avatar }}
+          style={StyleSheet.absoluteFill}
+          blurRadius={38}
+        />
         <LinearGradient
-          colors={['rgba(8, 10, 12, 0.84)', 'rgba(8, 10, 12, 0.72)', 'rgba(8, 10, 12, 0.94)']}
+          colors={[
+            "rgba(8, 10, 12, 0.84)",
+            "rgba(8, 10, 12, 0.72)",
+            "rgba(8, 10, 12, 0.94)",
+          ]}
           style={StyleSheet.absoluteFill}
         />
-        <SafeAreaView style={styles.ringingContent} edges={['top', 'bottom']}>
+        <SafeAreaView
+          style={styles.connectingContent}
+          edges={["top", "bottom"]}
+        >
+          <Text style={styles.connectingDirLabel}>Incoming video call</Text>
+          <Image
+            source={{ uri: profile.avatar }}
+            style={styles.connectingAvatar}
+          />
+          <Text style={styles.connectingName}>{profile.name}</Text>
+          <Text style={styles.connectingStatus}>Connecting...</Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (callState === "ringing") {
+    return (
+      <View style={styles.ringingContainer}>
+        <Image
+          source={{ uri: profile.avatar }}
+          style={StyleSheet.absoluteFill}
+          blurRadius={38}
+        />
+        <LinearGradient
+          colors={[
+            "rgba(8, 10, 12, 0.84)",
+            "rgba(8, 10, 12, 0.72)",
+            "rgba(8, 10, 12, 0.94)",
+          ]}
+          style={StyleSheet.absoluteFill}
+        />
+        <SafeAreaView style={styles.ringingContent} edges={["top", "bottom"]}>
           {/* Top Security & Status Ticker */}
           <View style={styles.ringingHeaderSection}>
             <BlurView intensity={70} tint="dark" style={styles.encryptedPill}>
               <View style={styles.greenLiveDot} />
-              <Text style={styles.encryptedPillText}>256-BIT ENCRYPTED HD LINE</Text>
+              <Text style={styles.encryptedPillText}>
+                256-BIT ENCRYPTED HD LINE
+              </Text>
             </BlurView>
             <Text style={styles.connectingTitle}>CALLING VIP STREAM...</Text>
           </View>
@@ -581,14 +771,22 @@ export default function VideoCallScreen() {
             />
 
             {/* Glowing Avatar Frame with Gradient Border */}
-            <Animated.View style={[styles.avatarPulseRing, { transform: [{ scale: pulseAnim }] }]}>
+            <Animated.View
+              style={[
+                styles.avatarPulseRing,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            >
               <LinearGradient
-                colors={['#f65592', '#FFD700', '#f65592']}
+                colors={["#f65592", "#FFD700", "#f65592"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.avatarGradientBorder}
               >
-                <Image source={{ uri: profile.avatar }} style={styles.ringingAvatar} />
+                <Image
+                  source={{ uri: profile.avatar }}
+                  style={styles.ringingAvatar}
+                />
               </LinearGradient>
             </Animated.View>
           </View>
@@ -605,15 +803,13 @@ export default function VideoCallScreen() {
                 {profile.city}, {profile.country}
               </Text>
             </View>
-            <View style={styles.rateChip}>
-              <CoinIcon size={14} style={{ marginRight: 6 }} />
-              <Text style={styles.rateChipText}>{profile.callRate} Coins / Min</Text>
-            </View>
           </View>
 
           {/* Bottom Cancel & Status */}
           <View style={styles.ringingBottom}>
-            <Text style={styles.handshakeText}>Connecting secure audio & video stream...</Text>
+            <Text style={styles.handshakeText}>
+              Connecting secure audio & video stream...
+            </Text>
             <TouchableOpacity
               style={styles.hangupButtonLarge}
               onPress={() => {
@@ -622,7 +818,7 @@ export default function VideoCallScreen() {
                   name: profile.name,
                   avatar: profile.avatar,
                   city: profile.city,
-                  type: 'missed',
+                  type: "missed",
                   durationSeconds: 0,
                   coinsSpent: 0,
                 });
@@ -630,7 +826,12 @@ export default function VideoCallScreen() {
               }}
               activeOpacity={0.8}
             >
-              <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              <Ionicons
+                name="call"
+                size={32}
+                color="#FFF"
+                style={{ transform: [{ rotate: "135deg" }] }}
+              />
             </TouchableOpacity>
             <Text style={styles.cancelCallText}>Decline Call</Text>
           </View>
@@ -642,49 +843,198 @@ export default function VideoCallScreen() {
   // -------------------------------------------------------------
   // CALL ENDED SUMMARY
   // -------------------------------------------------------------
-  if (callState === 'ended') {
-    const totalSpent = Math.max(1, Math.ceil(callSeconds / 60)) * profile.callRate;
+  if (callState === "ended") {
+    const totalSpent =
+      Math.max(1, Math.ceil(callSeconds / 60)) * profile.callRate;
+    const isDepleted =
+      disconnectReason === "coins_depleted" ||
+      disconnectReason === "insufficient_coins" ||
+      coins < profile.callRate;
+
     return (
       <AppBackground>
-        <View style={[styles.endedContainer, { backgroundColor: 'transparent' }]}>
-          <SafeAreaView style={styles.endedContent} edges={['top', 'bottom']}>
-            <Image source={{ uri: profile.avatar }} style={styles.endedAvatar} />
-            <Text style={[styles.endedTitle, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+        <View
+          style={[styles.endedContainer, { backgroundColor: "transparent" }]}
+        >
+          <SafeAreaView style={styles.endedContent} edges={["top", "bottom"]}>
+            <Image
+              source={{ uri: profile.avatar }}
+              style={styles.endedAvatar}
+            />
+            <Text
+              style={[
+                styles.endedTitle,
+                { color: isDark ? "#FFFFFF" : "#191C1D" },
+              ]}
+            >
               Call Ended
             </Text>
-            <Text style={[styles.endedName, { color: isDark ? '#dfbec6' : '#6B7280' }]}>
+            <Text
+              style={[
+                styles.endedName,
+                { color: isDark ? "#dfbec6" : "#6B7280" },
+              ]}
+            >
               with {profile.name}
             </Text>
+            <Text
+              style={[
+                styles.endedDir,
+                { color: isDark ? "#F65592" : "#F65592" },
+              ]}
+            >
+              {direction === "incoming" ? "Incoming call" : "Outgoing call"}
+            </Text>
+
+            {/* Disconnection Reason Banner */}
+            {isDepleted ? (
+              <View
+                style={[
+                  styles.disconnectCard,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(235, 87, 87, 0.14)"
+                      : "rgba(244, 63, 94, 0.08)",
+                  },
+                ]}
+              >
+                <View style={styles.disconnectBadgeRow}>
+                  <View
+                    style={[
+                      styles.disconnectIconWrap,
+                      {
+                        backgroundColor: isDark
+                          ? "rgba(235, 87, 87, 0.22)"
+                          : "rgba(244, 63, 94, 0.14)",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="wallet"
+                      size={14}
+                      color={isDark ? "#FF6B8B" : "#E11D48"}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.disconnectBadgeText,
+                      { color: isDark ? "#FF6B8B" : "#E11D48" },
+                    ]}
+                  >
+                    Call Disconnected · Low Balance
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.disconnectExplanation,
+                    {
+                      color: isDark
+                        ? "rgba(241, 224, 228, 0.82)"
+                        : "#5A5F66",
+                    },
+                  ]}
+                >
+                  Your video call ended because coins ran out. {profile.name}'s rate is {profile.callRate} coins/min.
+                </Text>
+                <TouchableOpacity
+                  style={styles.endedRechargeBtn}
+                  onPress={() => setRechargeModalVisible(true)}
+                  activeOpacity={0.85}
+                >
+                  <CoinIcon size={14} />
+                  <Text style={styles.endedRechargeBtnText}>
+                    Recharge to Call Again
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.normalEndedBadge,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.05)",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={14}
+                  color={isDark ? "#10B981" : "#059669"}
+                />
+                <Text
+                  style={[
+                    styles.normalEndedText,
+                    {
+                      color: isDark
+                        ? "rgba(255, 255, 255, 0.7)"
+                        : "#4B5563",
+                    },
+                  ]}
+                >
+                  Call Ended Normally
+                </Text>
+              </View>
+            )}
 
             <View
               style={[
                 styles.summaryCard,
                 {
-                  backgroundColor: isDark ? 'rgba(30, 32, 32, 0.85)' : '#FFFFFF',
+                  backgroundColor: isDark
+                    ? "rgba(30, 32, 32, 0.85)"
+                    : "#FFFFFF",
                 },
               ]}
             >
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#A68990' : '#6B7280' }]}>
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: isDark ? "#A68990" : "#6B7280" },
+                  ]}
+                >
                   Duration
                 </Text>
-                <Text style={[styles.summaryValue, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    { color: isDark ? "#FFFFFF" : "#191C1D" },
+                  ]}
+                >
                   {formatTime(callSeconds)}
                 </Text>
               </View>
               <View
                 style={[
                   styles.summaryDivider,
-                  { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' },
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.06)",
+                  },
                 ]}
               />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: isDark ? '#A68990' : '#6B7280' }]}>
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: isDark ? "#A68990" : "#6B7280" },
+                  ]}
+                >
                   Coins Spent
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <CoinIcon size={14} color={isDark ? '#FFD700' : '#D97706'} />
-                  <Text style={[styles.summaryValueCoins, { color: isDark ? '#FFD700' : '#D97706' }]}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <CoinIcon size={14} color={isDark ? "#FFD700" : "#D97706"} />
+                  <Text
+                    style={[
+                      styles.summaryValueCoins,
+                      { color: isDark ? "#FFD700" : "#D97706" },
+                    ]}
+                  >
                     {callSeconds > 0 ? totalSpent : 0}
                   </Text>
                 </View>
@@ -707,43 +1057,60 @@ export default function VideoCallScreen() {
                 style={[
                   styles.doneBtn,
                   {
-                    backgroundColor: isDark ? '#2D3030' : '#F1F3F5',
+                    backgroundColor: isDark ? "#2D3030" : "#F1F3F5",
                   },
                 ]}
                 onPress={() => router.back()}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.doneBtnText, { color: isDark ? '#FFFFFF' : '#191C1D' }]}>
+                <Text
+                  style={[
+                    styles.doneBtnText,
+                    { color: isDark ? "#FFFFFF" : "#191C1D" },
+                  ]}
+                >
                   Back to Discover
                 </Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
 
-          {/* Coins Depleted Modal (Custom AppModal, replaces native Alert) */}
+          {/* Coins Depleted / Low Balance Modal */}
           <AppModal
             visible={coinsDepletedModalVisible}
-            onClose={() => setCoinsDepletedModalVisible(false)}
-            title="Coins Depleted"
-            description="Your coin balance ran out during the call. Recharge now to continue your private video connections!"
+            onClose={() => {
+              setCoinsDepletedModalVisible(false);
+            }}
+            title={
+              coins < profile.callRate ? "Insufficient Coins" : "Coins Depleted"
+            }
+            description={
+              coins < profile.callRate
+                ? `${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`
+                : "Your coin balance ran out during the call. Recharge now to continue your private video connections!"
+            }
             icon="wallet-outline"
             iconColor="#FFD700"
             primaryAction={{
-              label: 'Recharge Now',
+              label: "Recharge Now",
               onPress: () => {
                 setCoinsDepletedModalVisible(false);
                 setRechargeModalVisible(true);
               },
             }}
             secondaryAction={{
-              label: 'View Summary',
-              onPress: () => setCoinsDepletedModalVisible(false),
+              label: "Dismiss",
+              onPress: () => {
+                setCoinsDepletedModalVisible(false);
+              },
             }}
           />
 
           <RechargeModal
             visible={rechargeModalVisible}
-            onClose={() => setRechargeModalVisible(false)}
+            onClose={() => {
+              setRechargeModalVisible(false);
+            }}
           />
         </View>
       </AppBackground>
@@ -764,19 +1131,39 @@ export default function VideoCallScreen() {
         nativeControls={false}
       />
 
+      {/* Blurred Video Canvas Overlay on Low Balance */}
+      {inCallRechargeAlertVisible && (
+        <BlurView
+          intensity={Platform.OS === "android" ? 95 : 85}
+          tint="dark"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "rgba(0, 0, 0, 0.65)" },
+          ]}
+        />
+      )}
+
       {/* Top and Bottom Linear Gradients (Enhanced Depth & Richness) */}
       <LinearGradient
-        colors={['rgba(0, 0, 0, 0.88)', 'rgba(0, 0, 0, 0.55)', 'rgba(0, 0, 0, 0.20)', 'transparent']}
+        colors={[
+          "rgba(0, 0, 0, 0.88)",
+          "rgba(0, 0, 0, 0.55)",
+          "rgba(0, 0, 0, 0.20)",
+          "transparent",
+        ]}
         style={styles.stitchTopGradient}
         pointerEvents="none"
       />
       <LinearGradient
-        colors={['transparent', 'rgba(0, 0, 0, 0.25)', 'rgba(0, 0, 0, 0.65)', 'rgba(0, 0, 0, 0.94)']}
+        colors={[
+          "transparent",
+          "rgba(0, 0, 0, 0.25)",
+          "rgba(0, 0, 0, 0.65)",
+          "rgba(0, 0, 0, 0.94)",
+        ]}
         style={styles.stitchBottomGradient}
         pointerEvents="none"
       />
-
-
 
       {/* Floating Reactions Rising from Random Points across the Bottom */}
       <View style={styles.floatingContainer} pointerEvents="none">
@@ -825,7 +1212,10 @@ export default function VideoCallScreen() {
         style={[
           styles.liveChatContainer,
           {
-            bottom: (keyboardHeight > 0 ? keyboardHeight + 28 : Math.max(insets.bottom, 16) + 12) + 60,
+            bottom:
+              (keyboardHeight > 0
+                ? keyboardHeight + 28
+                : Math.max(insets.bottom, 16) + 12) + 60,
           },
         ]}
         pointerEvents="none"
@@ -862,10 +1252,10 @@ export default function VideoCallScreen() {
       </View>
 
       {/* Top Header: Full-Width Info Card & Floating Camera Below on Right */}
-      <SafeAreaView style={styles.topSafeArea} edges={['top']}>
+      <SafeAreaView style={styles.topSafeArea} edges={["top"]}>
         {/* Full-Width Female Info Card with Real Frosted Blur & No Border */}
         <BlurView
-          intensity={Platform.OS === 'android' ? 85 : 65}
+          intensity={Platform.OS === "android" ? 85 : 65}
           tint="dark"
           style={styles.fullWidthInfoCard}
         >
@@ -879,7 +1269,10 @@ export default function VideoCallScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Image source={{ uri: profile.avatar }} style={styles.infoCardAvatar} />
+            <Image
+              source={{ uri: profile.avatar }}
+              style={styles.infoCardAvatar}
+            />
           </TouchableOpacity>
 
           <View style={styles.infoCardTextCol}>
@@ -914,7 +1307,10 @@ export default function VideoCallScreen() {
         <View style={styles.cameraPreviewContainer}>
           <View style={styles.stitchSelfPreviewCard}>
             {permission?.granted ? (
-              <CameraView style={styles.stitchSelfCamera} facing={cameraFacing} />
+              <CameraView
+                style={styles.stitchSelfCamera}
+                facing={cameraFacing}
+              />
             ) : (
               <View style={styles.stitchSelfFallback}>
                 <Ionicons name="person" size={26} color="#dfbec6" />
@@ -932,12 +1328,7 @@ export default function VideoCallScreen() {
           </View>
         )}
 
-        {/* Free preview badge — first 2 minutes */}
-        {callSeconds > 0 && callSeconds <= 120 && (
-          <View style={styles.freeBadge} pointerEvents="none">
-            <Text style={styles.freeBadgeText}>FREE</Text>
-          </View>
-        )}
+
       </SafeAreaView>
 
       {/* Bottom Controls & Chat Bar with Safe Keyboard Avoidance Gap */}
@@ -945,7 +1336,10 @@ export default function VideoCallScreen() {
         style={[
           styles.bottomControlsWrap,
           {
-            bottom: keyboardHeight > 0 ? keyboardHeight + 28 : Math.max(insets.bottom, 16) + 12,
+            bottom:
+              keyboardHeight > 0
+                ? keyboardHeight + 28
+                : Math.max(insets.bottom, 16) + 12,
           },
         ]}
       >
@@ -954,11 +1348,21 @@ export default function VideoCallScreen() {
           {/* Flip Camera Button with Frosted Blur */}
           <TouchableOpacity
             style={styles.stitchCircleGlassBtn}
-            onPress={() => setCameraFacing(cameraFacing === 'front' ? 'back' : 'front')}
+            onPress={() =>
+              setCameraFacing(cameraFacing === "front" ? "back" : "front")
+            }
             activeOpacity={0.8}
           >
-            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
-              <Ionicons name="camera-reverse-outline" size={24} color="#e2e2e2" />
+            <BlurView
+              intensity={Platform.OS === "android" ? 80 : 60}
+              tint="dark"
+              style={styles.stitchCircleBlurInner}
+            >
+              <Ionicons
+                name="camera-reverse-outline"
+                size={24}
+                color="#e2e2e2"
+              />
             </BlurView>
           </TouchableOpacity>
 
@@ -968,7 +1372,11 @@ export default function VideoCallScreen() {
             onPress={() => setGiftModalVisible(true)}
             activeOpacity={0.85}
           >
-            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
+            <BlurView
+              intensity={Platform.OS === "android" ? 80 : 60}
+              tint="dark"
+              style={styles.stitchCircleBlurInner}
+            >
               <Ionicons name="gift" size={26} color="#f65592" />
             </BlurView>
           </TouchableOpacity>
@@ -976,14 +1384,14 @@ export default function VideoCallScreen() {
           {/* End Call Red Button */}
           <TouchableOpacity
             style={styles.stitchEndCallBtn}
-            onPress={handleEndCall}
+            onPress={() => handleEndCall("user_ended")}
             activeOpacity={0.85}
           >
             <Ionicons
               name="call"
               size={36}
               color="#FFFFFF"
-              style={{ transform: [{ rotate: '135deg' }] }}
+              style={{ transform: [{ rotate: "135deg" }] }}
             />
           </TouchableOpacity>
 
@@ -998,11 +1406,15 @@ export default function VideoCallScreen() {
             }}
             activeOpacity={0.8}
           >
-            <BlurView intensity={Platform.OS === 'android' ? 80 : 60} tint="dark" style={styles.stitchCircleBlurInner}>
+            <BlurView
+              intensity={Platform.OS === "android" ? 80 : 60}
+              tint="dark"
+              style={styles.stitchCircleBlurInner}
+            >
               <Ionicons
-                name={isMuted ? 'mic-off' : 'mic'}
+                name={isMuted ? "mic-off" : "mic"}
                 size={24}
-                color={isMuted ? '#f65592' : '#e2e2e2'}
+                color={isMuted ? "#f65592" : "#e2e2e2"}
               />
             </BlurView>
           </TouchableOpacity>
@@ -1038,7 +1450,11 @@ export default function VideoCallScreen() {
         )}
 
         {/* Bottom Chat Input Bar with Frosted Blur & Safe Keyboard Gap */}
-        <BlurView intensity={Platform.OS === 'android' ? 85 : 70} tint="dark" style={styles.stitchChatInputBar}>
+        <BlurView
+          intensity={Platform.OS === "android" ? 85 : 70}
+          tint="dark"
+          style={styles.stitchChatInputBar}
+        >
           <TouchableOpacity
             style={styles.stitchEmojiBtn}
             onPress={() => {
@@ -1049,7 +1465,11 @@ export default function VideoCallScreen() {
             }}
             activeOpacity={0.8}
           >
-            <Ionicons name="happy-outline" size={22} color={showEmojiPicker ? '#f65592' : '#dfbec6'} />
+            <Ionicons
+              name="happy-outline"
+              size={22}
+              color={showEmojiPicker ? "#f65592" : "#dfbec6"}
+            />
           </TouchableOpacity>
 
           <TextInput
@@ -1107,7 +1527,7 @@ export default function VideoCallScreen() {
                     {
                       rotate: giftTravelAnim.interpolate({
                         inputRange: [0, 0.4, 0.8, 1],
-                        outputRange: ['-12deg', '10deg', '-4deg', '0deg'],
+                        outputRange: ["-12deg", "10deg", "-4deg", "0deg"],
                       }),
                     },
                   ],
@@ -1117,8 +1537,8 @@ export default function VideoCallScreen() {
               {/* STAGE 2: Gift box bursts open & fades out when opening */}
               <Animated.View
                 style={{
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  alignItems: "center",
+                  justifyContent: "center",
                   transform: [
                     {
                       scale: boxOpenAnim.interpolate({
@@ -1170,11 +1590,13 @@ export default function VideoCallScreen() {
                   {
                     backgroundColor: activeCelebration.accentColor
                       ? `${activeCelebration.accentColor}40`
-                      : 'rgba(246, 85, 146, 0.40)',
+                      : "rgba(246, 85, 146, 0.40)",
                   },
                 ]}
               />
-              <Text style={styles.justTheGiftEmoji}>{activeCelebration.emoji}</Text>
+              <Text style={styles.justTheGiftEmoji}>
+                {activeCelebration.emoji}
+              </Text>
             </Animated.View>
           </Animated.View>
         </View>
@@ -1189,7 +1611,56 @@ export default function VideoCallScreen() {
 
       <RechargeModal
         visible={rechargeModalVisible}
-        onClose={() => setRechargeModalVisible(false)}
+        onClose={async () => {
+          setRechargeModalVisible(false);
+          // If this recharge was triggered while the call was paused waiting for coins
+          if (inCallRechargeAlertVisible) {
+            const current = getCoins();
+            if (current >= profile.callRate) {
+              const success = await deductCoins(profile.callRate);
+              if (success) {
+                setInCallRechargeAlertVisible(false);
+                try {
+                  player.play();
+                } catch (e) {}
+                try {
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                } catch (e) {}
+              }
+            } else {
+              setInCallRechargeAlertVisible(false);
+              handleEndCall("coins_depleted");
+            }
+          }
+        }}
+      />
+
+      {/* In-Call Low Balance / Recharge Warning Alert (2 Options: Recharge or End Call) */}
+      <AppModal
+        visible={inCallRechargeAlertVisible}
+        onClose={() => {
+          setInCallRechargeAlertVisible(false);
+          handleEndCall("coins_depleted");
+        }}
+        title="Recharge to Continue Call"
+        description={`Your coins are depleted (${getCoins()} coins left). You need ${profile.callRate} coins/min to continue your private video call with ${profile.name}.\n\nRecharge now to continue the call! (Auto-disconnect in ${inCallGraceSeconds}s)`}
+        icon="wallet-outline"
+        iconColor="#FFD700"
+        primaryAction={{
+          label: "Recharge to Continue",
+          onPress: () => {
+            setRechargeModalVisible(true);
+          },
+        }}
+        secondaryAction={{
+          label: "End Call",
+          onPress: () => {
+            setInCallRechargeAlertVisible(false);
+            handleEndCall("coins_depleted");
+          },
+        }}
       />
 
       {/* Compact In-Call Profile Modal (Exactly what is shown on profile details screen) */}
@@ -1229,11 +1700,13 @@ export default function VideoCallScreen() {
                 <View
                   style={[
                     styles.compactStatusBadge,
-                    { backgroundColor: profile.isOnline ? '#10B981' : '#E11D48' },
+                    {
+                      backgroundColor: profile.isOnline ? "#10B981" : "#E11D48",
+                    },
                   ]}
                 >
                   <Text style={styles.compactStatusText}>
-                    {profile.isOnline ? 'Online' : 'Busy'}
+                    {profile.isOnline ? "Online" : "Busy"}
                   </Text>
                 </View>
               </View>
@@ -1241,7 +1714,11 @@ export default function VideoCallScreen() {
               {/* Bottom Glassmorphic Overlay: Name, Age, Location, Bio */}
               <View style={styles.compactGlassOverlay}>
                 <LinearGradient
-                  colors={['transparent', 'rgba(234, 76, 137, 0.5)', 'rgba(234, 76, 137, 0.95)']}
+                  colors={[
+                    "transparent",
+                    "rgba(234, 76, 137, 0.5)",
+                    "rgba(234, 76, 137, 0.95)",
+                  ]}
                   locations={[0, 0.45, 1]}
                   style={StyleSheet.absoluteFill}
                 />
@@ -1274,23 +1751,32 @@ export default function VideoCallScreen() {
                 contentContainerStyle={styles.compactThumbScroll}
               >
                 {[profile.avatar, ...(profile.photos || [])].map((uri, idx) => {
-                  const isSelected = (selectedModalPhoto || profile.avatar) === uri;
+                  const isSelected =
+                    (selectedModalPhoto || profile.avatar) === uri;
                   return (
                     <TouchableOpacity
                       key={idx}
                       style={[
                         styles.compactThumbBtn,
-                        isSelected ? styles.compactThumbActive : styles.compactThumbInactive,
+                        isSelected
+                          ? styles.compactThumbActive
+                          : styles.compactThumbInactive,
                       ]}
                       onPress={() => {
                         try {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light,
+                          );
                         } catch (e) {}
                         setSelectedModalPhoto(uri);
                       }}
                       activeOpacity={0.85}
                     >
-                      <Image source={{ uri }} style={styles.compactThumbImg} resizeMode="cover" />
+                      <Image
+                        source={{ uri }}
+                        style={styles.compactThumbImg}
+                        resizeMode="cover"
+                      />
                     </TouchableOpacity>
                   );
                 })}
@@ -1306,17 +1792,17 @@ export default function VideoCallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121414',
+    backgroundColor: "#121414",
   },
   stitchTopGradient: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 230,
   },
   stitchBottomGradient: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -1325,7 +1811,7 @@ const styles = StyleSheet.create({
 
   // Top Area
   topSafeArea: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -1337,16 +1823,16 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(18, 20, 24, 0.50)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(18, 20, 24, 0.50)",
     borderWidth: 0,
-    overflow: 'hidden',
+    overflow: "hidden",
     gap: 12,
   },
   infoCardAvatarWrap: {
     borderRadius: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   infoCardAvatar: {
     width: 42,
@@ -1359,36 +1845,36 @@ const styles = StyleSheet.create({
   },
   infoCardName: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     letterSpacing: -0.2,
   },
   infoCardLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
   },
   infoCardLocationText: {
     fontSize: 12,
-    color: '#dfbec6',
-    fontWeight: '500',
+    color: "#dfbec6",
+    fontWeight: "500",
   },
   viewProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    backgroundColor: '#f65592',
+    backgroundColor: "#f65592",
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 18,
   },
   viewProfileBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   cameraPreviewContainer: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginRight: 16,
     marginTop: 14,
   },
@@ -1398,120 +1884,106 @@ const styles = StyleSheet.create({
     width: 96,
     height: 140,
     borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(30, 32, 32, 0.65)',
+    overflow: "hidden",
+    backgroundColor: "rgba(30, 32, 32, 0.65)",
   },
   stitchSelfCamera: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   stitchSelfFallback: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E2020',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1E2020",
   },
   stitchSelfFallbackText: {
-    color: '#dfbec6',
+    color: "#dfbec6",
     fontSize: 11,
     marginTop: 4,
   },
   reconnectingOverlay: {
-    position: 'absolute',
-    top: '45%',
+    position: "absolute",
+    top: "45%",
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderRadius: 16,
-    marginHorizontal: 'auto',
+    marginHorizontal: "auto",
     width: 180,
   },
   reconnectingText: {
-    color: '#FFD700',
+    color: "#FFD700",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.4,
   },
-  freeBadge: {
-    position: 'absolute',
-    top: '45%',
-    left: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: '#10B981',
-  },
-  freeBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
+
 
   // Live Gift Celebration Showcase Overlay
   celebrationOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 9999,
     elevation: 9999,
   },
   // Just The Gift Animation
   justTheGiftWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     width: 240,
     height: 240,
   },
   giftBoxLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
     width: 170,
     height: 170,
   },
   giftBoxEmoji: {
     fontSize: 112,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
     textShadowOffset: { width: 0, height: 10 },
     textShadowRadius: 26,
   },
   revealedGiftLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
     width: 230,
     height: 230,
   },
   giftGlowCircle: {
-    position: 'absolute',
+    position: "absolute",
     width: 190,
     height: 190,
     borderRadius: 95,
   },
   justTheGiftEmoji: {
     fontSize: 130,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
     textShadowOffset: { width: 0, height: 10 },
     textShadowRadius: 28,
   },
 
   // Floating Reactions from Random Bottom Points
   floatingContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 90,
     left: 0,
     right: 0,
@@ -1519,7 +1991,7 @@ const styles = StyleSheet.create({
     zIndex: 15,
   },
   floatingGift: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
   },
@@ -1529,33 +2001,33 @@ const styles = StyleSheet.create({
 
   // Live Stream In-Call Chat Messages (Starts from top of input and floats upward)
   liveChatContainer: {
-    position: 'absolute',
+    position: "absolute",
     left: 20,
     right: 20,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 30,
     gap: 8,
   },
   liveChatPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(18, 16, 22, 0.85)',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "rgba(18, 16, 22, 0.85)",
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 22,
-    maxWidth: '85%',
+    maxWidth: "85%",
   },
   liveChatContent: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
 
   // Bottom Controls & Input
   bottomControlsWrap: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -1564,54 +2036,54 @@ const styles = StyleSheet.create({
     zIndex: 25,
   },
   stitchActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 18,
   },
   stitchCircleGlassBtn: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   stitchCircleBlurInner: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(30, 32, 32, 0.5)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(30, 32, 32, 0.5)",
   },
   stitchEndCallBtn: {
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#93000a',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#93000a",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Stitch Chat Input Bar
   stitchChatInputBar: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(20, 22, 26, 0.65)',
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: "rgba(20, 22, 26, 0.65)",
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 0,
   },
   stitchEmojiBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.10)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   stitchChatTextInput: {
     flex: 1,
-    color: '#e2e2e2',
+    color: "#e2e2e2",
     fontSize: 14,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -1620,40 +2092,40 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#f65592',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f65592",
+    alignItems: "center",
+    justifyContent: "center",
   },
   emojiPickerBar: {
     borderRadius: 26,
-    backgroundColor: 'rgba(28, 18, 22, 0.88)',
-    overflow: 'hidden',
+    backgroundColor: "rgba(28, 18, 22, 0.88)",
+    overflow: "hidden",
     paddingVertical: 8,
     paddingLeft: 6,
     paddingRight: 10,
     marginBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   emojiPickerScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 6,
   },
   emojiPickerCloseBtn: {
     marginLeft: 6,
     padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emojiBtnItem: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.10)",
   },
   emojiChar: {
     fontSize: 20,
@@ -1665,74 +2137,103 @@ const styles = StyleSheet.create({
   // Ringing State Styles (Advanced VIP Connection Screen)
   ringingContainer: {
     flex: 1,
-    backgroundColor: '#080A0C',
+    backgroundColor: "#080A0C",
   },
   ringingContent: {
     flex: 1,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 36,
   },
+  connectingContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 14,
+  },
+  connectingAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  connectingName: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  connectingStatus: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  connectingDirLabel: {
+    color: "#F65592",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
   ringingHeaderSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 14,
     gap: 12,
   },
   encryptedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    overflow: 'hidden',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    overflow: "hidden",
   },
   greenLiveDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   encryptedPillText: {
-    color: '#10B981',
+    color: "#10B981",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1.2,
   },
   connectingTitle: {
-    color: '#f65592',
+    color: "#f65592",
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 2.2,
   },
   radarSonarContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     width: 280,
     height: 280,
     marginVertical: 10,
   },
   sonarRing: {
-    position: 'absolute',
+    position: "absolute",
     width: 140,
     height: 140,
     borderRadius: 70,
     borderWidth: 2,
-    borderColor: 'rgba(246, 85, 146, 0.7)',
+    borderColor: "rgba(246, 85, 146, 0.7)",
   },
   avatarPulseRing: {
     width: 156,
     height: 156,
     borderRadius: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarGradientBorder: {
     padding: 4,
     borderRadius: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   ringingAvatar: {
     width: 140,
@@ -1740,50 +2241,36 @@ const styles = StyleSheet.create({
     borderRadius: 70,
   },
   ringingMetaCard: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 6,
   },
   ringingNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   ringingName: {
     fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: "800",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   ringingLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   ringingLocation: {
     fontSize: 14,
-    color: '#dfbec6',
-    fontWeight: '500',
-  },
-  rateChip: {
-    marginTop: 10,
-    backgroundColor: 'rgba(246, 85, 146, 0.18)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rateChipText: {
-    color: '#FFB1C6',
-    fontSize: 13,
-    fontWeight: '600',
+    color: "#dfbec6",
+    fontWeight: "500",
   },
   ringingBottom: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   handshakeText: {
-    color: 'rgba(223, 190, 198, 0.75)',
+    color: "rgba(223, 190, 198, 0.75)",
     fontSize: 12,
     marginBottom: 16,
     letterSpacing: 0.5,
@@ -1792,145 +2279,203 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#93000a',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#93000a",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cancelCallText: {
-    color: '#dfbec6',
+    color: "#dfbec6",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     marginTop: 12,
   },
 
   // Ended State Styles
   endedContainer: {
     flex: 1,
-    backgroundColor: '#0C0F10',
-    justifyContent: 'center',
+    backgroundColor: "transparent",
+    justifyContent: "center",
   },
   endedContent: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
   },
   endedAvatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    marginBottom: 20,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginBottom: 10,
   },
   endedTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
   endedName: {
-    fontSize: 16,
-    color: '#dfbec6',
+    fontSize: 14,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  endedDir: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
     marginTop: 4,
-    marginBottom: 28,
+    marginBottom: 14,
   },
   summaryCard: {
-    width: '100%',
-    backgroundColor: '#1E2020',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 36,
+    width: "100%",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
   },
   summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   summaryLabel: {
-    fontSize: 15,
-    color: '#dfbec6',
+    fontSize: 13,
+    fontWeight: "500",
   },
   summaryValue: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: "700",
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: 'rgba(166, 137, 144, 0.15)',
-    marginVertical: 14,
+    marginVertical: 8,
   },
   summaryValueCoins: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFD700',
+    fontSize: 15,
+    fontWeight: "800",
   },
   endedBtnCol: {
-    width: '100%',
-    gap: 12,
+    width: "100%",
+    gap: 8,
   },
   chatCTA: {
-    backgroundColor: '#f65592',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 15,
-    borderRadius: 28,
+    backgroundColor: "#F65592",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 12,
+    borderRadius: 22,
   },
   chatCTAText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   doneBtn: {
-    backgroundColor: '#282A2B',
-    paddingVertical: 15,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 11,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
   doneBtnText: {
-    color: '#dfbec6',
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: "600",
+  },
+  disconnectCard: {
+    width: "100%",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 0,
+    gap: 6,
+  },
+  disconnectBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  disconnectIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disconnectBadgeText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  disconnectExplanation: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  endedRechargeBtn: {
+    marginTop: 4,
+    backgroundColor: "#F65592",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  endedRechargeBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  normalEndedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginBottom: 14,
+  },
+  normalEndedText: {
+    fontSize: 11.5,
+    fontWeight: "600",
   },
 
   // Compact In-Call Profile Modal (Matching profile details screen)
   compactProfileBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 20,
   },
   compactProfileContent: {
-    width: '100%',
+    width: "100%",
     maxWidth: 380,
     gap: 12,
   },
   compactProfileCard: {
-    width: '100%',
+    width: "100%",
     height: 380,
     borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#1E1822',
+    overflow: "hidden",
+    backgroundColor: "#1E1822",
   },
   compactTopRow: {
-    position: 'absolute',
+    position: "absolute",
     top: 14,
     left: 14,
     right: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     zIndex: 10,
   },
   compactCloseBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   compactStatusBadge: {
     paddingHorizontal: 12,
@@ -1938,64 +2483,64 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   compactStatusText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   compactGlassOverlay: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 140,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   compactInfoContent: {
     padding: 16,
     gap: 4,
   },
   compactNameHeading: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   compactLocationLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   compactLocationText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   compactBioText: {
-    color: 'rgba(255, 255, 255, 0.92)',
+    color: "rgba(255, 255, 255, 0.92)",
     fontSize: 12,
     lineHeight: 17,
     marginTop: 2,
   },
   compactThumbWrap: {
-    width: '100%',
+    width: "100%",
   },
   compactThumbScroll: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   compactThumbBtn: {
     width: 50,
     height: 50,
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   compactThumbActive: {},
   compactThumbInactive: {
     opacity: 0.5,
   },
   compactThumbImg: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 });

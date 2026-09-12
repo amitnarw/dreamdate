@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
-import { BlurTargetView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { BlurTargetView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -13,26 +13,30 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AppBackground from '../../components/AppBackground';
-import AppHeader from '../../components/AppHeader';
-import AppModal from '../../components/AppModal';
-import IncomingCallOverlay from '../../components/IncomingCallOverlay';
-import { useTabBlur } from '../../context/TabBlurContext';
-import { useTheme } from '../../context/ThemeContext';
-import { MOCK_PROFILES, Profile } from '../../data/mockProfiles';
-import { incomingCallService } from '../../services/incomingCallService';
-import { useWallet } from '../../services/wallet';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import AppBackground from "../../components/AppBackground";
+import AppHeader from "../../components/AppHeader";
+import AppModal from "../../components/AppModal";
+import RechargeModal from "../../components/RechargeModal";
+import { useTabBlur } from "../../context/TabBlurContext";
+import { useTheme } from "../../context/ThemeContext";
+import { MOCK_PROFILES, Profile } from "../../data/mockProfiles";
+import { incomingCallService } from "../../services/incomingCallService";
+import { useWallet } from "../../services/wallet";
 
 function GridProfileCard({
   item,
   index,
   router,
+  coins,
+  onNeedRecharge,
 }: {
   item: Profile;
   index: number;
   router: any;
+  coins: number;
+  onNeedRecharge: (profile: Profile) => void;
 }) {
   const isBusy = !item.isOnline || index % 5 === 1;
   const { theme, isDark } = useTheme();
@@ -42,17 +46,17 @@ function GridProfileCard({
       style={[
         styles.gridCard,
         {
-          backgroundColor: isDark ? '#1C1618' : '#FFFFFF',
+          backgroundColor: isDark ? "#1C1618" : "#FFFFFF",
         },
       ]}
-      onPress={() => router.push(`/profile/${item.id.split('_p')[0]}` as any)}
+      onPress={() => router.push(`/profile/${item.id.split("_p")[0]}` as any)}
       activeOpacity={0.9}
     >
       {/* Background & Avatar Image */}
       <View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: isDark ? '#271D20' : '#E9ECEF' },
+          { backgroundColor: isDark ? "#271D20" : "#E9ECEF" },
         ]}
       />
       {item.avatar ? (
@@ -64,19 +68,19 @@ function GridProfileCard({
         colors={
           isDark
             ? [
-                'transparent',
-                'rgba(14, 10, 12, 0.0)',
-                'rgba(14, 10, 12, 0.60)',
-                'rgba(14, 10, 12, 0.95)',
+                "transparent",
+                "rgba(14, 10, 12, 0.0)",
+                "rgba(14, 10, 12, 0.60)",
+                "rgba(14, 10, 12, 0.95)",
               ]
             : [
-                'transparent',
-                'rgba(255, 255, 255, 0.0)',
-                'rgba(255, 255, 255, 0.72)',
-                'rgba(255, 255, 255, 0.98)',
+                "transparent",
+                "rgba(255, 255, 255, 0.0)",
+                "rgba(255, 255, 255, 0.72)",
+                "rgba(255, 255, 255, 0.98)",
               ]
         }
-        locations={[0, 0.40, 0.72, 1]}
+        locations={[0, 0.4, 0.72, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -86,13 +90,11 @@ function GridProfileCard({
         style={[
           styles.statusBadge,
           {
-            backgroundColor: isBusy ? '#E11D48' : '#10B981',
+            backgroundColor: isBusy ? "#E11D48" : "#10B981",
           },
         ]}
       >
-        <Text style={styles.statusText}>
-          {isBusy ? 'Busy' : 'Online'}
-        </Text>
+        <Text style={styles.statusText}>{isBusy ? "Busy" : "Online"}</Text>
       </View>
 
       {/* Archetype badge removed */}
@@ -102,20 +104,14 @@ function GridProfileCard({
         {/* Name and Age: Name truncates if long, Age is ALWAYS visible */}
         <View style={styles.cardNameRow}>
           <Text
-            style={[
-              styles.cardName,
-              { color: isDark ? '#FFFFFF' : '#191C1D' },
-            ]}
+            style={[styles.cardName, { color: isDark ? "#FFFFFF" : "#191C1D" }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {item.name}
           </Text>
           <Text
-            style={[
-              styles.cardAge,
-              { color: isDark ? '#FFFFFF' : '#191C1D' },
-            ]}
+            style={[styles.cardAge, { color: isDark ? "#FFFFFF" : "#191C1D" }]}
           >
             , {item.age}
           </Text>
@@ -125,12 +121,12 @@ function GridProfileCard({
           <Ionicons
             name="location-sharp"
             size={11}
-            color={isDark ? 'rgba(223, 190, 198, 0.90)' : '#5A606B'}
+            color={isDark ? "rgba(223, 190, 198, 0.90)" : "#5A606B"}
           />
           <Text
             style={[
               styles.cardCity,
-              { color: isDark ? 'rgba(223, 190, 198, 0.90)' : '#5A606B' },
+              { color: isDark ? "rgba(223, 190, 198, 0.90)" : "#5A606B" },
             ]}
             numberOfLines={1}
           >
@@ -145,14 +141,12 @@ function GridProfileCard({
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/chat/${item.id.split('_p')[0]}` as any);
+            router.push(`/chat/${item.id.split("_p")[0]}` as any);
           }}
           style={[
             styles.actionCircleChat,
             {
-              backgroundColor: isDark
-                ? 'rgba(28, 18, 22, 0.85)'
-                : '#FFFFFF',
+              backgroundColor: isDark ? "rgba(28, 18, 22, 0.85)" : "#FFFFFF",
             },
           ]}
           activeOpacity={0.8}
@@ -160,7 +154,7 @@ function GridProfileCard({
           <Ionicons
             name="chatbubble-ellipses"
             size={17}
-            color={isDark ? '#FF70A0' : '#E11D48'}
+            color={isDark ? "#FF70A0" : "#E11D48"}
           />
         </TouchableOpacity>
 
@@ -168,7 +162,11 @@ function GridProfileCard({
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/call/${item.id.split('_p')[0]}` as any);
+            if (coins < item.callRate) {
+              onNeedRecharge(item);
+              return;
+            }
+            router.push(`/call/${item.id.split("_p")[0]}` as any);
           }}
           style={styles.actionCircleCall}
           activeOpacity={0.85}
@@ -180,32 +178,60 @@ function GridProfileCard({
   );
 }
 
-function SkeletonCard({ isDark }: { isDark: boolean }) {
+/** Fixed-height load-more footer: spinner + pulsing "Loading" text.
+ *  Always mounted (empty when idle) so the list never jumps when the
+ *  loader appears/disappears ,  new cards simply fill the space below. */
+function LoadMoreFooter({
+  isDark,
+  loading,
+}: {
+  isDark: boolean;
+  loading: boolean;
+}) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!loading) return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 750, useNativeDriver: true }),
-      ])
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
     );
     loop.start();
     return () => loop.stop();
-  }, []);
-
-  const baseBg = isDark ? '#1E1418' : '#F1F3F5';
-  const overlayBg = isDark ? '#2A1C20' : '#E5E7EB';
+  }, [loading]);
 
   return (
-    <Animated.View
-      style={[
-        styles.gridCard,
-        { backgroundColor: baseBg, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.65, 1] }) },
-      ]}
-    >
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
-    </Animated.View>
+    <View style={styles.loadMoreFooter}>
+      {loading ? (
+        <View style={styles.loadMoreRow}>
+          <ActivityIndicator size="small" color="#F65592" />
+          <Animated.Text
+            style={[
+              styles.loadMoreText,
+              {
+                color: isDark ? "rgba(241, 224, 228, 0.70)" : "#6B7280",
+                opacity: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.45, 1],
+                }),
+              },
+            ]}
+          >
+            Loading more...
+          </Animated.Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -220,29 +246,40 @@ export default function HomeScreen() {
   const [page, setPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // VIP teaser strip — shown from 2nd session onward if not VIP, dismissible
-  const { isVip } = useWallet();
+  // VIP teaser strip ,  shown from 2nd session onward if not VIP, dismissible
+  const { coins, isVip } = useWallet();
   const [showVipTeaser, setShowVipTeaser] = useState(false);
+  const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [lowBalanceAlert, setLowBalanceAlert] = useState<{
+    visible: boolean;
+    profile?: Profile;
+  }>({ visible: false });
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         try {
-          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-          const seen = await AsyncStorage.getItem('@dreamdate_vip_teaser_seen_v1');
-          const launchCountRaw = await AsyncStorage.getItem('@dreamdate_launch_count_v1');
+          const AsyncStorage = (
+            await import("@react-native-async-storage/async-storage")
+          ).default;
+          const seen = await AsyncStorage.getItem(
+            "@dreamdate_vip_teaser_seen_v1",
+          );
+          const launchCountRaw = await AsyncStorage.getItem(
+            "@dreamdate_launch_count_v1",
+          );
           const launchCount = launchCountRaw ? parseInt(launchCountRaw, 10) : 0;
-          if (!cancelled && !isVip && seen !== '1' && launchCount >= 1) {
+          if (!cancelled && !isVip && seen !== "1" && launchCount >= 1) {
             // Show on 2nd session onwards (launchCount >= 1 means they've opened at least once)
             setShowVipTeaser(true);
-            await AsyncStorage.setItem('@dreamdate_vip_teaser_seen_v1', '1');
+            await AsyncStorage.setItem("@dreamdate_vip_teaser_seen_v1", "1");
           }
         } catch (e) {}
       })();
       return () => {
         cancelled = true;
       };
-    }, [isVip])
+    }, [isVip]),
   );
 
   useEffect(() => {
@@ -254,9 +291,9 @@ export default function HomeScreen() {
     useCallback(() => {
       incomingCallService.scheduleFirstIfEligible().catch(() => {});
       return () => {
-        // Don't cancel here — if it fires the overlay handles it
+        // Don't cancel here ,  if it fires the overlay handles it
       };
-    }, [])
+    }, []),
   );
 
   const handleLoadMore = () => {
@@ -274,7 +311,7 @@ export default function HomeScreen() {
       setProfilesList((prev) => [...prev, ...moreProfiles]);
       setPage(nextPage);
       setIsLoadingMore(false);
-    }, 400);
+    }, 900);
   };
 
   useFocusEffect(
@@ -284,32 +321,31 @@ export default function HomeScreen() {
         return true;
       };
 
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
       return () => sub.remove();
-    }, [])
+    }, []),
   );
 
   return (
     <BlurTargetView
       ref={targets.index}
-      style={[
-        styles.container,
-        { overflow: 'hidden' },
-      ]}
+      style={[styles.container, { overflow: "hidden" }]}
     >
       <AppBackground>
-        <SafeAreaView
-          style={styles.container}
-          edges={['left', 'right']}
-        >
+        <SafeAreaView style={styles.container} edges={["left", "right"]}>
           {/* AppHeader */}
           <AppHeader
-            title="DreamDate"
+            title="BoloNa"
             showCoins={true}
             leftElement={
-              <View style={styles.brandCircle}>
-                <Ionicons name="heart" size={18} color="#F65592" />
-              </View>
+              <Image
+                source={require("../../../assets/images/logo.png")}
+                style={{ width: 30, height: 30, borderRadius: 9 }}
+                resizeMode="cover"
+              />
             }
           />
 
@@ -330,7 +366,7 @@ export default function HomeScreen() {
                     <Text
                       style={[
                         styles.headlineText,
-                        { color: isDark ? '#FFFFFF' : '#191C1D' },
+                        { color: isDark ? "#FFFFFF" : "#191C1D" },
                       ]}
                     >
                       Discover
@@ -338,7 +374,7 @@ export default function HomeScreen() {
                     <Text
                       style={[
                         styles.headlineSub,
-                        { color: isDark ? '#DFBEC6' : '#6B7280' },
+                        { color: isDark ? "#DFBEC6" : "#6B7280" },
                       ]}
                     >
                       🔥 4,280 Female Companions Online Now
@@ -348,42 +384,249 @@ export default function HomeScreen() {
 
                 {showVipTeaser && (
                   <TouchableOpacity
-                    style={styles.vipTeaser}
-                    onPress={() => router.push('/vip' as any)}
-                    activeOpacity={0.85}
+                    style={styles.vipCardWrap}
+                    onPress={() => router.push("/vip" as any)}
+                    activeOpacity={0.92}
                   >
-                    <View style={styles.vipTeaserIcon}>
-                      <Ionicons name="ribbon" size={18} color="#FFD700" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.vipTeaserTitle}>Go VIP · ₹500/week</Text>
-                      <Text style={styles.vipTeaserSub}>
-                        Unlimited free chat + 50% off calls + 1,500 coins/week
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setShowVipTeaser(false)}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    <LinearGradient
+                      colors={
+                        isDark
+                          ? ["#2A1420", "#180B13"]
+                          : ["#FFF2F6", "#FFE6EE"]
+                      }
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.vipCardGradient}
                     >
-                      <Ionicons name="close" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                    </TouchableOpacity>
+                      {/* Ambient background glow */}
+                      <View
+                        style={[
+                          styles.vipAmbientOrb1,
+                          {
+                            backgroundColor: isDark
+                              ? "rgba(246, 85, 146, 0.14)"
+                              : "rgba(255, 215, 0, 0.15)",
+                          },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.vipAmbientOrb2,
+                          {
+                            backgroundColor: isDark
+                              ? "rgba(255, 215, 0, 0.08)"
+                              : "rgba(246, 85, 146, 0.10)",
+                          },
+                        ]}
+                      />
+
+                      {/* Row 1: VIP Badge Pill & Dismiss */}
+                      <View style={styles.vipTopRow}>
+                        <View
+                          style={[
+                            styles.vipBadgePill,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 215, 0, 0.16)"
+                                : "rgba(245, 158, 11, 0.14)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="sparkles"
+                            size={11}
+                            color={isDark ? "#FFD700" : "#D97706"}
+                          />
+                          <Text
+                            style={[
+                              styles.vipBadgeText,
+                              { color: isDark ? "#FFD700" : "#92400E" },
+                            ]}
+                          >
+                            VIP ALL-ACCESS
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setShowVipTeaser(false);
+                          }}
+                          style={[
+                            styles.vipDismissBtn,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.08)"
+                                : "rgba(0, 0, 0, 0.05)",
+                            },
+                          ]}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name="close"
+                            size={14}
+                            color={isDark ? "rgba(255,255,255,0.7)" : "#6B4556"}
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Row 2: Headline & CTA inline */}
+                      <View style={styles.vipMainRow}>
+                        <View style={styles.vipTextCol}>
+                          <Text
+                            style={[
+                              styles.vipHeadline,
+                              { color: isDark ? "#FFFFFF" : "#1E0C18" },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            Unlock VIP Privileges
+                          </Text>
+                          <Text
+                            style={[
+                              styles.vipSubheadline,
+                              {
+                                color: isDark
+                                  ? "rgba(241, 224, 228, 0.75)"
+                                  : "#6B4556",
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            Unlimited photos, free chat & 50% off
+                          </Text>
+                        </View>
+
+                        <View style={styles.vipCtaBtn}>
+                          <Text style={styles.vipCtaText}>Get VIP • ₹499</Text>
+                          <Ionicons
+                            name="arrow-forward"
+                            size={13}
+                            color="#FFFFFF"
+                          />
+                        </View>
+                      </View>
+
+                      {/* Row 3: Micro Perk Chips */}
+                      <View style={styles.vipPerksRow}>
+                        <View
+                          style={[
+                            styles.vipPerkChip,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.06)"
+                                : "rgba(255, 255, 255, 0.85)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="images"
+                            size={11}
+                            color="#38BDF8"
+                          />
+                          <Text
+                            style={[
+                              styles.vipPerkText,
+                              { color: isDark ? "#FFFFFF" : "#1E0C18" },
+                            ]}
+                          >
+                            Unlimited Photos
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.vipPerkChip,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.06)"
+                                : "rgba(255, 255, 255, 0.85)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="chatbubble-ellipses"
+                            size={11}
+                            color={isDark ? "#4ADE80" : "#16A34A"}
+                          />
+                          <Text
+                            style={[
+                              styles.vipPerkText,
+                              { color: isDark ? "#FFFFFF" : "#1E0C18" },
+                            ]}
+                          >
+                            Free Chat
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.vipPerkChip,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.06)"
+                                : "rgba(255, 255, 255, 0.85)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="videocam"
+                            size={11}
+                            color="#F65592"
+                          />
+                          <Text
+                            style={[
+                              styles.vipPerkText,
+                              { color: isDark ? "#FFFFFF" : "#1E0C18" },
+                            ]}
+                          >
+                            50% Off
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.vipPerkChip,
+                            {
+                              backgroundColor: isDark
+                                ? "rgba(255, 255, 255, 0.06)"
+                                : "rgba(255, 255, 255, 0.85)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="trophy"
+                            size={11}
+                            color={isDark ? "#FFD700" : "#D97706"}
+                          />
+                          <Text
+                            style={[
+                              styles.vipPerkText,
+                              { color: isDark ? "#FFFFFF" : "#1E0C18" },
+                            ]}
+                          >
+                            +1,500 Coins
+                          </Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
               </View>
             }
             ListFooterComponent={
-              isLoadingMore ? (
-                <View style={styles.gridRow}>
-                  <SkeletonCard isDark={isDark} />
-                  <SkeletonCard isDark={isDark} />
-                </View>
-              ) : null
+              <LoadMoreFooter isDark={isDark} loading={isLoadingMore} />
             }
             renderItem={({ item, index }) => (
               <GridProfileCard
                 item={item}
                 index={index}
                 router={router}
+                coins={coins}
+                onNeedRecharge={(profile) =>
+                  setLowBalanceAlert({ visible: true, profile })
+                }
               />
             )}
           />
@@ -396,18 +639,44 @@ export default function HomeScreen() {
             description="Are you sure you want to exit the app? Your conversations and coins will be saved."
             icon="log-out"
             primaryAction={{
-              label: 'Exit App',
+              label: "Exit App",
               onPress: () => BackHandler.exitApp(),
-              variant: 'destructive',
+              variant: "destructive",
             }}
             secondaryAction={{
-              label: 'Stay',
+              label: "Stay",
               onPress: () => setExitModalVisible(false),
             }}
           />
 
-          {/* In-app simulated incoming call overlay */}
-          <IncomingCallOverlay />
+          {/* Low Balance Video Call Notice */}
+          <AppModal
+            visible={lowBalanceAlert.visible}
+            onClose={() => setLowBalanceAlert({ visible: false })}
+            title="Insufficient Coins"
+            description={
+              lowBalanceAlert.profile
+                ? `${lowBalanceAlert.profile.name}'s video call rate is ${lowBalanceAlert.profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`
+                : "You do not have enough coins to start this video call."
+            }
+            icon="videocam-outline"
+            primaryAction={{
+              label: "Recharge Now",
+              onPress: () => {
+                setLowBalanceAlert({ visible: false });
+                setRechargeModalVisible(true);
+              },
+            }}
+            secondaryAction={{
+              label: "Cancel",
+              onPress: () => setLowBalanceAlert({ visible: false }),
+            }}
+          />
+
+          <RechargeModal
+            visible={rechargeModalVisible}
+            onClose={() => setRechargeModalVisible(false)}
+          />
         </SafeAreaView>
       </AppBackground>
     </BlurTargetView>
@@ -422,68 +691,164 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(246, 85, 146, 0.12)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(246, 85, 146, 0.12)",
   },
   scrollContent: {
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 110,
   },
+  loadMoreFooter: {
+    height: 72,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadMoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   titleRow: {
     marginBottom: 16,
   },
-  vipTeaser: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
+  vipCardWrap: {
     borderRadius: 18,
-    gap: 12,
-    backgroundColor: 'rgba(255, 215, 0, 0.10)',
-    marginBottom: 12,
+    marginBottom: 14,
+    overflow: "hidden",
   },
-  vipTeaserIcon: {
-    width: 36,
-    height: 36,
+  vipCardGradient: {
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 215, 0, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    position: "relative",
+    overflow: "hidden",
   },
-  vipTeaserTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFD700',
+  vipAmbientOrb1: {
+    position: "absolute",
+    top: -40,
+    right: -30,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
   },
-  vipTeaserSub: {
-    fontSize: 11,
+  vipAmbientOrb2: {
+    position: "absolute",
+    bottom: -50,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  vipTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    zIndex: 2,
+  },
+  vipBadgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 16,
+  },
+  vipBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  vipDismissBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  vipMainRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    zIndex: 2,
+  },
+  vipTextCol: {
+    flex: 1,
+  },
+  vipHeadline: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  vipSubheadline: {
+    fontSize: 11.5,
+    fontWeight: "500",
     marginTop: 2,
-    color: 'rgba(241, 224, 228, 0.70)',
+  },
+  vipCtaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F65592",
+    paddingHorizontal: 12,
+    paddingVertical: 7.5,
+    borderRadius: 16,
+  },
+  vipCtaText: {
+    color: "#FFFFFF",
+    fontSize: 11.5,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  vipPerksRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 9,
+    zIndex: 2,
+  },
+  vipPerkChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  vipPerkText: {
+    fontSize: 9.5,
+    fontWeight: "700",
   },
   headlineText: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.3,
   },
   headlineSub: {
     fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   gridRow: {
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     marginBottom: 16,
   },
   gridCard: {
-    width: '48%',
+    width: "48%",
     height: 260,
     borderRadius: 22,
-    overflow: 'hidden',
-    position: 'relative',
+    overflow: "hidden",
+    position: "relative",
   },
   statusBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: 9,
     left: 9,
     paddingHorizontal: 8,
@@ -492,9 +857,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.3,
   },
   filterEmoji: {
@@ -504,7 +869,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   cardGlassPanel: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -515,31 +880,31 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   cardNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
   },
   cardName: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     flexShrink: 1,
   },
   cardAge: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     flexShrink: 0,
   },
   cardLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
   },
   cardCity: {
     fontSize: 10,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   cardVerticalActionsCol: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 10,
     right: 10,
     gap: 8,
@@ -549,15 +914,15 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionCircleCall: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F65592',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#F65592",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

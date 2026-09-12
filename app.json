@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "dreamdate",
-    "slug": "dreamdate",
+    "name": "BoloNa - Live Video calling & Chat",
+    "slug": "bolona",
     "version": "1.0.0",
+    "description": "Naye logon se Live Video Chat aur one-to-one Video Call par connect karein.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dreamdate",
+    "scheme": "bolona",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0C0F10",
     "ios": {
@@ -14,6 +15,9 @@
     "android": {
       "package": "com.amitnarwal.dreamdate",
       "backgroundColor": "#0C0F10",
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0C0F10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -49,9 +53,18 @@
         "expo-notifications",
         {
           "color": "#F65592",
-          "defaultChannel": "private-messages"
+          "defaultChannel": "private-messages-v2"
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-asset",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

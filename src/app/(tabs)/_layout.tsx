@@ -5,8 +5,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Easing,
   LayoutChangeEvent,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -15,6 +17,7 @@ import AppBlurView from '../../components/AppBlurView';
 import { AppBlurConfig } from '../../constants/blurConfig';
 import { TabBlurProvider, useTabBlur } from '../../context/TabBlurContext';
 import { useTheme } from '../../context/ThemeContext';
+import { subscribeUnreadCount } from '../../services/chatEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -34,6 +37,13 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
   const indicatorPillWidth = Math.max(48, slotWidth - 6);
 
   const indicatorAnim = useRef(new Animated.Value(state.index)).current;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    return subscribeUnreadCount((count) => {
+      setUnreadCount(count);
+    });
+  }, []);
 
   useEffect(() => {
     Animated.spring(indicatorAnim, {
@@ -141,17 +151,40 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
               style={styles.tabSlot}
             >
               <View style={styles.tabPillContent}>
-                <Ionicons
-                  name={isFocused ? meta.icon : meta.iconOutline}
-                  size={23}
-                  color={
-                    isFocused
-                      ? '#FFFFFF'
-                      : isDark
-                      ? 'rgba(241, 224, 228, 0.70)'
-                      : 'rgba(50, 50, 55, 0.75)'
-                  }
-                />
+                <View style={styles.tabIconWrap}>
+                  <Ionicons
+                    name={isFocused ? meta.icon : meta.iconOutline}
+                    size={23}
+                    color={
+                      isFocused
+                        ? '#FFFFFF'
+                        : isDark
+                        ? 'rgba(241, 224, 228, 0.70)'
+                        : 'rgba(50, 50, 55, 0.75)'
+                    }
+                  />
+                  {route.name === 'history' && unreadCount > 0 && (
+                    <View
+                      style={[
+                        styles.badgePill,
+                        {
+                          backgroundColor: isFocused ? '#FFFFFF' : '#F65592',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          {
+                            color: isFocused ? '#F65592' : '#FFFFFF',
+                          },
+                        ]}
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -168,7 +201,22 @@ export default function TabLayout() {
         tabBar={(props) => <FloatingGlassTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          animation: 'none',
+          animation: 'fade',
+          transitionSpec: {
+            animation: 'timing',
+            config: {
+              duration: 160,
+              easing: Easing.out(Easing.cubic),
+            },
+          },
+          sceneStyleInterpolator: ({ current }: any) => ({
+            sceneStyle: {
+              opacity: current.progress.interpolate({
+                inputRange: [-1, 0, 1],
+                outputRange: [0, 1, 0],
+              }),
+            },
+          }),
           lazy: false,
         }}
       >
@@ -217,5 +265,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabIconWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePill: {
+    position: 'absolute',
+    top: -5,
+    right: -12,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: 12,
   },
 });

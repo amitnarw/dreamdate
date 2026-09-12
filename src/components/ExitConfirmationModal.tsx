@@ -25,7 +25,7 @@ export default function ExitConfirmationModal({
     <AppModal
       visible={visible}
       onClose={onClose}
-      title="Exit DreamDate?"
+      title="Exit BoloNa?"
       description="Are you sure you want to leave? Your virtual companions will be waiting for you!"
       icon="log-out-outline"
       iconColor="#F65592"

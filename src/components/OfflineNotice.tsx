@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppBackground from './AppBackground';
 import { useTheme } from '../context/ThemeContext';
+import { setOnline } from '../services/onlineState';
 
 interface OfflineNoticeProps {
   children?: React.ReactNode;
@@ -113,6 +114,12 @@ export default function OfflineNotice({ children }: OfflineNoticeProps) {
     }
   }, [isOffline]);
 
+  // Publish connectivity to the shared engagement funnel so scheduled
+  // notifications + in-app timers don't fire while the user is blocked.
+  useEffect(() => {
+    setOnline(!isOffline);
+  }, [isOffline]);
+
   if (!isOffline) {
     return <>{children}</>;
   }
@@ -151,7 +158,7 @@ export default function OfflineNotice({ children }: OfflineNoticeProps) {
               { color: isDark ? 'rgba(241, 224, 228, 0.70)' : '#6B7280' },
             ]}
           >
-            Please check your Wi-Fi or mobile data settings and reconnect to enjoy DreamDate.
+            Please check your Wi-Fi or mobile data settings and reconnect to enjoy BoloNa.
           </Text>
 
           {/* Retry Button */}

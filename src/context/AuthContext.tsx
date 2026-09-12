@@ -1,9 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
-import { useRouter, useSegments } from 'expo-router';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { initFirstRunEngagement } from '../services/engagementService';
-import { addCoins } from '../services/wallet';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { useRouter, useSegments } from "expo-router";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  cancelEngagementTimers,
+  initFirstRunEngagement,
+} from "../services/engagementService";
+import { incomingCallService } from "../services/incomingCallService";
 
 export interface AuthUser {
   id: string;
@@ -22,8 +25,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-const AUTH_STORAGE_KEY = '@dreamdate_auth_user_v1';
-const WELCOME_BONUS_AWARDED_KEY = '@dreamdate_welcome_bonus_v1';
+const AUTH_STORAGE_KEY = "@dreamdate_auth_user_v1";
+const WELCOME_BONUS_AWARDED_KEY = "@dreamdate_welcome_bonus_v1";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -47,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(JSON.parse(stored));
         }
       } catch (e) {
-        console.error('Failed to load local user auth session', e);
+        console.error("Failed to load local user auth session", e);
       } finally {
         setIsLoading(false);
       }
@@ -59,18 +62,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
 
-    const inLoginScreen = segments[0] === 'login';
+    const inLoginScreen = segments[0] === "login";
 
     if (!user && !inLoginScreen) {
-      router.replace('/login' as any);
+      router.replace("/login" as any);
     } else if (user && inLoginScreen) {
-      router.replace('/(tabs)' as any);
+      router.replace("/(tabs)" as any);
     }
   }, [user, isLoading, segments]);
 
   const fastLogin = async (acceptTerms: boolean) => {
     if (!acceptTerms) {
-      throw new Error('You must accept the User Agreement and Privacy Policy to continue.');
+      throw new Error(
+        "You must accept the User Agreement and Privacy Policy to continue.",
+      );
     }
 
     try {
@@ -82,22 +87,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const guestId = `guest_${Date.now().toString(36)}`;
       const localGuestUser: AuthUser = {
         id: guestId,
-        name: 'Guest User',
-        email: '',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+        name: "Guest User",
+        email: "",
+        avatar:
+          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80",
         isGoogleUser: false,
         termsAccepted: true,
         joinedAt: new Date().toISOString(),
       };
 
-      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(localGuestUser));
+      await AsyncStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify(localGuestUser),
+      );
 
-      // Award 100 Welcome Bonus Coins on first fast login
-      const alreadyAwarded = await AsyncStorage.getItem(WELCOME_BONUS_AWARDED_KEY);
-      if (!alreadyAwarded) {
-        await addCoins(100);
-        await AsyncStorage.setItem(WELCOME_BONUS_AWARDED_KEY, 'true');
-      }
+      // No coin grant here ,  the wallet already seeds 50 free coins on first
+      // install (INITIAL_COINS). Mark the flag so legacy installs stay settled.
+      try {
+        await AsyncStorage.setItem(WELCOME_BONUS_AWARDED_KEY, "true");
+      } catch (e) {}
 
       setUser(localGuestUser);
 
@@ -105,15 +113,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (e) {}
 
-      // Kick off the first-run engagement funnel (pre-seed thread, schedule
-      // the first-message + missed-call notifications).
+      // Kick off the first-run engagement funnel. Writes nothing up front ,
+      // her opener messages are delivered in-app at T+1/2/3 min (race-guarded,
+      // so concurrent triggers collapse into one run).
       try {
         await initFirstRunEngagement();
       } catch (e) {}
 
-      router.replace('/(tabs)' as any);
+      // Anchor the first-install video call request to login (T+2 min).
+      // Discover focus re-arms it as a fallback; the service never resets
+      // a pending timer, so this is safe to call from both places.
+      try {
+        await incomingCallService.scheduleFirstIfEligible();
+      } catch (e) {}
+
+      router.replace("/(tabs)" as any);
     } catch (error) {
-      console.error('Fast Login failed', error);
+      console.error("Fast Login failed", error);
       throw error;
     }
   };
@@ -125,10 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
 
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      cancelEngagementTimers();
       setUser(null);
-      router.replace('/login' as any);
+      router.replace("/login" as any);
     } catch (e) {
-      console.error('Logout failed', e);
+      console.error("Logout failed", e);
     }
   };
 

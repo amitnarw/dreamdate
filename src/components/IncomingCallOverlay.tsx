@@ -7,28 +7,61 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Dimensions,
+  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
+  Vibration,
   View,
 } from 'react-native';
 import { incomingCallService } from '../services/incomingCallService';
+import { startRinging, stopRinging } from '../services/soundService';
 import { Profile } from '../data/mockProfiles';
+import { getCoins } from '../services/wallet';
+import AppModal from './AppModal';
+import RechargeModal from './RechargeModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+/** Max time the incoming-call request rings before auto-cut (missed call). */
+const RING_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Classic phone vibration cadence while ringing (loops until stopped). */
+const RING_VIBRATION_PATTERN = [0, 700, 800];
+
 /**
- * Full-screen overlay shown when the in-app incoming-call service fires.
- * Listens via subscribe(); renders ringing UI; Accept routes to /call/[id],
- * Decline dismisses (service retries up to MAX_RETRIES).
+ * Full-screen incoming-call request. Mounted at the app root so it renders
+ * above every screen (tabs, tab bar, modals) via a native Modal, which
+ * blocks all touch behind it like a real incoming call.
+ *
+ * Accept routes to /call/[id]?dir=incoming. Decline, Android-back, or the
+ * 2-minute timeout all go through the service (retry x2, then missed log).
  */
 export default function IncomingCallOverlay() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
+  const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
   const pulse = useRef(new Animated.Value(1)).current;
   const sonar1 = useRef(new Animated.Value(0)).current;
   const sonar2 = useRef(new Animated.Value(0)).current;
+  const ringTimer = useRef<any>(null);
+  const profileRef = useRef<Profile | null>(null);
+  profileRef.current = profile;
+
+  const stopRing = () => {
+    if (ringTimer.current) {
+      clearTimeout(ringTimer.current);
+      ringTimer.current = null;
+    }
+    try {
+      Vibration.cancel();
+    } catch (e) {}
+    stopRinging().catch(() => {});
+  };
 
   useEffect(() => {
     const unsub = incomingCallService.subscribe((p) => {
@@ -37,11 +70,28 @@ export default function IncomingCallOverlay() {
       } catch (e) {}
       setProfile(p);
     });
-    return unsub;
+    return () => {
+      unsub();
+      stopRing();
+    };
   }, []);
 
   useEffect(() => {
     if (!profile) return;
+
+    // Real call behavior: looping ringtone + repeating vibration
+    startRinging().catch(() => {});
+    try {
+      Vibration.vibrate(RING_VIBRATION_PATTERN, true);
+    } catch (e) {}
+
+    // Auto-cut after 2 minutes: missed call, normal retry/missed-log path
+    ringTimer.current = setTimeout(() => {
+      const p = profileRef.current;
+      stopRing();
+      setProfile(null);
+      if (p) incomingCallService.dismissed();
+    }, RING_TIMEOUT_MS);
 
     Animated.loop(
       Animated.sequence([
@@ -68,108 +118,192 @@ export default function IncomingCallOverlay() {
     };
   }, [profile?.id]);
 
-  if (!profile) return null;
+  // Android hardware back while ringing = decline (never dismiss silently)
+  useEffect(() => {
+    if (!profile) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const p = profileRef.current;
+      stopRing();
+      setProfile(null);
+      if (p) incomingCallService.declined(p.id);
+      return true;
+    });
+    return () => sub.remove();
+  }, [profile?.id]);
 
   const handleAccept = () => {
-    incomingCallService.accepted(profile.id);
+    const p = profileRef.current;
+    if (!p) return;
+    const currentCoins = getCoins();
+    if (currentCoins < p.callRate) {
+      stopRing();
+      setPendingProfile(p);
+      setProfile(null);
+      setInsufficientModalVisible(true);
+      return;
+    }
+    stopRing();
+    incomingCallService.accepted(p.id);
     setProfile(null);
-    router.push(`/call/${profile.id}` as any);
+    router.push(`/call/${p.id}?dir=incoming` as any);
   };
 
   const handleDecline = () => {
-    incomingCallService.declined(profile.id);
+    const p = profileRef.current;
+    stopRing();
     setProfile(null);
+    if (p) incomingCallService.declined(p.id);
   };
 
   return (
-    <View style={styles.overlay}>
-      <BlurView
-        intensity={85}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
-      />
-      <Animated.View
-        style={[
-          styles.avatarWrap,
-          { transform: [{ scale: pulse }] },
-        ]}
+    <>
+      <Modal
+        visible={!!profile}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleDecline}
       >
-        <ExpoImage
-          source={{ uri: profile.avatar }}
-          style={styles.avatar}
-          contentFit="cover"
-          transition={200}
-        />
-        <Animated.View
-          style={[
-            styles.sonar,
-            {
-              opacity: sonar1.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
-              transform: [
-                {
-                  scale: sonar1.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
-                },
-              ],
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.sonar,
-            {
-              opacity: sonar2.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
-              transform: [
-                {
-                  scale: sonar2.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
-                },
-              ],
-            },
-          ]}
-        />
-      </Animated.View>
+        {profile ? (
+          <View style={styles.overlay}>
+            <BlurView
+              intensity={85}
+              tint="dark"
+              style={StyleSheet.absoluteFill}
+            />
+            <Animated.View
+              style={[
+                styles.avatarWrap,
+                { transform: [{ scale: pulse }] },
+              ]}
+            >
+              <ExpoImage
+                source={{ uri: profile.avatar }}
+                style={styles.avatar}
+                contentFit="cover"
+                transition={200}
+              />
+              <Animated.View
+                style={[
+                  styles.sonar,
+                  {
+                    opacity: sonar1.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+                    transform: [
+                      {
+                        scale: sonar1.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Animated.View
+                style={[
+                  styles.sonar,
+                  {
+                    opacity: sonar2.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+                    transform: [
+                      {
+                        scale: sonar2.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </Animated.View>
 
-      <Text style={styles.callerName}>{profile.name}</Text>
-      <Text style={styles.callType}>Private video call · Encrypted</Text>
+            <Text style={styles.callerName}>{profile.name}</Text>
+            <Text style={styles.callType}>Incoming private video call</Text>
 
-      <View style={styles.actionsRow}>
-        <View style={styles.actionCol}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.declineBtn]}
-            onPress={handleDecline}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-          </TouchableOpacity>
-          <Text style={styles.actionLabel}>Decline</Text>
-        </View>
+            <View style={styles.actionsRow}>
+              <View style={styles.actionCol}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.declineBtn]}
+                  onPress={handleDecline}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>Decline</Text>
+              </View>
 
-        <View style={styles.actionCol}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.acceptBtn]}
-            onPress={handleAccept}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="videocam" size={28} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={[styles.actionLabel, { color: '#F65592' }]}>Accept</Text>
-        </View>
-      </View>
-    </View>
+              <View style={styles.actionCol}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.acceptBtn]}
+                  onPress={handleAccept}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons name="videocam" size={28} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={[styles.actionLabel, { color: '#F65592' }]}>Accept</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View />
+        )}
+      </Modal>
+
+      <AppModal
+        visible={insufficientModalVisible}
+        onClose={() => {
+          setInsufficientModalVisible(false);
+          if (pendingProfile) {
+            incomingCallService.declined(pendingProfile.id);
+          }
+          setPendingProfile(null);
+        }}
+        title="Insufficient Coins to Answer"
+        description={`${pendingProfile?.name}'s private video call costs ${pendingProfile?.callRate} coins/min. You currently have ${getCoins()} coins.\n\nPlease recharge to answer her call!`}
+        icon="wallet-outline"
+        iconColor="#FFD700"
+        primaryAction={{
+          label: "Recharge to Answer",
+          onPress: () => {
+            setInsufficientModalVisible(false);
+            setRechargeModalVisible(true);
+          },
+        }}
+        secondaryAction={{
+          label: "Decline Call",
+          onPress: () => {
+            setInsufficientModalVisible(false);
+            if (pendingProfile) {
+              incomingCallService.declined(pendingProfile.id);
+            }
+            setPendingProfile(null);
+          },
+        }}
+      />
+
+      <RechargeModal
+        visible={rechargeModalVisible}
+        onClose={() => {
+          setRechargeModalVisible(false);
+          if (pendingProfile) {
+            const current = getCoins();
+            if (current >= pendingProfile.callRate) {
+              incomingCallService.accepted(pendingProfile.id);
+              const pid = pendingProfile.id;
+              setPendingProfile(null);
+              router.push(`/call/${pid}?dir=incoming` as any);
+              return;
+            } else {
+              incomingCallService.declined(pendingProfile.id);
+            }
+          }
+          setPendingProfile(null);
+        }}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
-    elevation: 9999,
   },
   avatarWrap: {
     width: 160,

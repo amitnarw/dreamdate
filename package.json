@@ -8,6 +8,8 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-masked-view/masked-view": "0.3.2",
     "expo": "~57.0.20",
+    "expo-asset": "~57.0.17",
+    "expo-audio": "~57.0.5",
     "expo-blur": "~57.0.2",
     "expo-camera": "~57.0.4",
     "expo-constants": "~57.0.17",
@@ -15,7 +17,9 @@
     "expo-font": "~57.0.3",
     "expo-glass-effect": "~57.0.1",
     "expo-haptics": "~57.0.2",
+    "expo-iap": "^5.6.0",
     "expo-image": "~57.0.4",
+    "expo-image-picker": "~57.0.17",
     "expo-intent-launcher": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
@@ -27,6 +31,7 @@
     "expo-system-ui": "~57.0.3",
     "expo-video": "~57.0.3",
     "expo-web-browser": "~57.0.2",
+    "node-nlp-rn": "^3.5.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -39,6 +44,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "esbuild": "^0.28.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
