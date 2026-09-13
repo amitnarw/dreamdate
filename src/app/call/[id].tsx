@@ -13,6 +13,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  BackHandler,
   Dimensions,
   Image,
   Keyboard,
@@ -118,8 +119,11 @@ export default function VideoCallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id, dir } = useLocalSearchParams<{ id: string; dir?: string }>();
+  const rawId = typeof id === "string" ? id : (Array.isArray(id) ? id[0] : "");
+  const cleanId = rawId.split("_p")[0].trim();
   const profile: Profile =
-    MOCK_PROFILES.find((p) => p.id === id) || MOCK_PROFILES[0];
+    MOCK_PROFILES.find((p) => p.id === cleanId || p.id === rawId) ||
+    MOCK_PROFILES[0];
   const { theme, isDark } = useTheme();
 
   // Incoming = she called you (accepted from the overlay). Outgoing = you
@@ -133,6 +137,9 @@ export default function VideoCallScreen() {
     direction === "incoming" ? "connecting" : "ringing",
   );
   const [callSeconds, setCallSeconds] = useState(0);
+  const callSecondsRef = useRef(0);
+  const [actualCoinsSpent, setActualCoinsSpent] = useState(0);
+  const actualCoinsSpentRef = useRef(0);
   const [isMuted, setIsMuted] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<"front" | "back">("front");
   const [giftModalVisible, setGiftModalVisible] = useState(false);
@@ -141,6 +148,7 @@ export default function VideoCallScreen() {
     useState(false);
   const [inCallRechargeAlertVisible, setInCallRechargeAlertVisible] =
     useState(false);
+  const [endCallConfirmVisible, setEndCallConfirmVisible] = useState(false);
   const [inCallGraceSeconds, setInCallGraceSeconds] = useState(20);
   const [disconnectReason, setDisconnectReason] = useState<
     "user_ended" | "coins_depleted" | "insufficient_coins" | null
@@ -353,7 +361,10 @@ export default function VideoCallScreen() {
       if (!initialMinuteDeductedRef.current) {
         initialMinuteDeductedRef.current = true;
         deductCoins(profile.callRate).then((success) => {
-          if (!success) {
+          if (success) {
+            actualCoinsSpentRef.current = profile.callRate;
+            setActualCoinsSpent(profile.callRate);
+          } else {
             handleEndCall("insufficient_coins");
             setCoinsDepletedModalVisible(true);
             schedulePostDepletionReminder(profile.name).catch(() => {});
@@ -364,8 +375,9 @@ export default function VideoCallScreen() {
       interval = setInterval(async () => {
         setCallSeconds((prev) => {
           const next = prev + 1;
+          callSecondsRef.current = next;
 
-          // Deduct next minute at each 60s boundary
+          // Deduct next minute at each 60s boundary (60s, 120s, 180s, etc.)
           const isCheckPoint = next > 0 && next % 60 === 0;
 
           if (isCheckPoint) {
@@ -378,7 +390,12 @@ export default function VideoCallScreen() {
               setInCallRechargeAlertVisible(true);
               setInCallGraceSeconds(20);
             } else {
-              deductCoins(profile.callRate);
+              deductCoins(profile.callRate).then((success) => {
+                if (success) {
+                  actualCoinsSpentRef.current += profile.callRate;
+                  setActualCoinsSpent(actualCoinsSpentRef.current);
+                }
+              });
             }
           }
 
@@ -440,24 +457,28 @@ export default function VideoCallScreen() {
     } catch (e) {}
     setCallState("ended");
 
-    const durationMins = callSeconds > 0 ? Math.ceil(callSeconds / 60) : 0;
-    const coinsSpent = durationMins * profile.callRate;
+    const finalDuration = callSecondsRef.current || callSeconds;
+    const billedMins = finalDuration > 0 ? Math.ceil(finalDuration / 60) : 0;
+    const coinsSpent = billedMins * profile.callRate;
+    actualCoinsSpentRef.current = coinsSpent;
+    setActualCoinsSpent(coinsSpent);
+
     saveCallLog({
       profileId: profile.id,
       name: profile.name,
       avatar: profile.avatar,
       city: profile.city,
       type: direction,
-      durationSeconds: callSeconds,
+      durationSeconds: finalDuration,
       coinsSpent: coinsSpent,
     });
 
     // Schedule post-call follow-up message (1–3 min after end)
-    if (callSeconds >= 30) {
+    if (finalDuration >= 30) {
       const followUpDelay = (60 + Math.floor(Math.random() * 120)) * 1000;
       followUpTimerRef.current = setTimeout(async () => {
         try {
-          const text = generatePostCallFollowUp(profile, callSeconds);
+          const text = generatePostCallFollowUp(profile, finalDuration);
           const newMsg: ChatMessage = {
             id: "msg-followup-" + Date.now(),
             sender: "profile",
@@ -478,6 +499,58 @@ export default function VideoCallScreen() {
       }, followUpDelay);
     }
   };
+
+  const requestBackOrEndCall = () => {
+    if (callState === "ended") {
+      router.back();
+      return true;
+    }
+    if (giftModalVisible) {
+      setGiftModalVisible(false);
+      return true;
+    }
+    if (rechargeModalVisible) {
+      setRechargeModalVisible(false);
+      return true;
+    }
+    if (profileModalVisible) {
+      setProfileModalVisible(false);
+      return true;
+    }
+    if (inCallRechargeAlertVisible) {
+      return true;
+    }
+    if (endCallConfirmVisible) {
+      setEndCallConfirmVisible(false);
+      return true;
+    }
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
+    setEndCallConfirmVisible(true);
+    return true;
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      return requestBackOrEndCall();
+    };
+
+    const backSub = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => backSub.remove();
+  }, [
+    callState,
+    giftModalVisible,
+    rechargeModalVisible,
+    profileModalVisible,
+    inCallRechargeAlertVisible,
+    endCallConfirmVisible,
+  ]);
 
   const handleGiftSent = (gift: any) => {
     // Exact matching guarantee so the exact gift sent is displayed
@@ -835,6 +908,38 @@ export default function VideoCallScreen() {
             </TouchableOpacity>
             <Text style={styles.cancelCallText}>Decline Call</Text>
           </View>
+
+          {/* Cancel Call Confirmation on Ringing */}
+          <AppModal
+            visible={endCallConfirmVisible}
+            onClose={() => setEndCallConfirmVisible(false)}
+            title="Cancel Call?"
+            description={`Are you sure you want to cancel calling ${profile.name}?`}
+            icon="call-outline"
+            iconColor="#FF4B6E"
+            primaryAction={{
+              label: "Cancel Call",
+              variant: "destructive",
+              onPress: () => {
+                setEndCallConfirmVisible(false);
+                saveCallLog({
+                  profileId: profile.id,
+                  name: profile.name,
+                  avatar: profile.avatar,
+                  city: profile.city,
+                  type: "missed",
+                  durationSeconds: 0,
+                  coinsSpent: 0,
+                });
+                router.back();
+              },
+            }}
+            secondaryAction={{
+              label: "Continue Calling",
+              variant: "secondary",
+              onPress: () => setEndCallConfirmVisible(false),
+            }}
+          />
         </SafeAreaView>
       </View>
     );
@@ -844,8 +949,9 @@ export default function VideoCallScreen() {
   // CALL ENDED SUMMARY
   // -------------------------------------------------------------
   if (callState === "ended") {
-    const totalSpent =
-      Math.max(1, Math.ceil(callSeconds / 60)) * profile.callRate;
+    const finalSeconds = callSecondsRef.current || callSeconds;
+    const billedMins = finalSeconds > 0 ? Math.ceil(finalSeconds / 60) : 0;
+    const totalSpent = billedMins * profile.callRate;
     const isDepleted =
       disconnectReason === "coins_depleted" ||
       disconnectReason === "insufficient_coins" ||
@@ -1003,9 +1109,10 @@ export default function VideoCallScreen() {
                     { color: isDark ? "#FFFFFF" : "#191C1D" },
                   ]}
                 >
-                  {formatTime(callSeconds)}
+                  {formatTime(finalSeconds)}
                 </Text>
               </View>
+
               <View
                 style={[
                   styles.summaryDivider,
@@ -1016,6 +1123,7 @@ export default function VideoCallScreen() {
                   },
                 ]}
               />
+
               <View style={styles.summaryRow}>
                 <Text
                   style={[
@@ -1023,8 +1131,56 @@ export default function VideoCallScreen() {
                     { color: isDark ? "#A68990" : "#6B7280" },
                   ]}
                 >
-                  Coins Spent
+                  Call Rate
                 </Text>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <CoinIcon size={14} color={isDark ? "#FFD700" : "#D97706"} />
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      { color: isDark ? "#FFFFFF" : "#191C1D" },
+                    ]}
+                  >
+                    {profile.callRate} / min
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.summaryDivider,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.06)",
+                  },
+                ]}
+              />
+
+              <View style={styles.summaryRow}>
+                <View>
+                  <Text
+                    style={[
+                      styles.summaryLabel,
+                      { color: isDark ? "#A68990" : "#6B7280" },
+                    ]}
+                  >
+                    Coins Spent
+                  </Text>
+                  {billedMins > 0 && (
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: isDark ? "#dfbec6" : "#8A9099",
+                        marginTop: 2,
+                      }}
+                    >
+                      {billedMins} min{billedMins > 1 ? "s" : ""} × {profile.callRate}
+                    </Text>
+                  )}
+                </View>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                 >
@@ -1035,7 +1191,7 @@ export default function VideoCallScreen() {
                       { color: isDark ? "#FFD700" : "#D97706" },
                     ]}
                   >
-                    {callSeconds > 0 ? totalSpent : 0}
+                    {totalSpent}
                   </Text>
                 </View>
               </View>
@@ -1259,6 +1415,15 @@ export default function VideoCallScreen() {
           tint="dark"
           style={styles.fullWidthInfoCard}
         >
+          <TouchableOpacity
+            style={styles.headerBackBtn}
+            onPress={requestBackOrEndCall}
+            activeOpacity={0.75}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={20} color="#FFF" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.infoCardAvatarWrap}
             onPress={() => {
@@ -1619,6 +1784,8 @@ export default function VideoCallScreen() {
             if (current >= profile.callRate) {
               const success = await deductCoins(profile.callRate);
               if (success) {
+                actualCoinsSpentRef.current += profile.callRate;
+                setActualCoinsSpent(actualCoinsSpentRef.current);
                 setInCallRechargeAlertVisible(false);
                 try {
                   player.play();
@@ -1660,6 +1827,29 @@ export default function VideoCallScreen() {
             setInCallRechargeAlertVisible(false);
             handleEndCall("coins_depleted");
           },
+        }}
+      />
+
+      {/* Back / End Call Confirmation Alert */}
+      <AppModal
+        visible={endCallConfirmVisible}
+        onClose={() => setEndCallConfirmVisible(false)}
+        title="Leave Video Call?"
+        description={`Are you sure you want to end your private video call with ${profile.name}?`}
+        icon="call-outline"
+        iconColor="#FF4B6E"
+        primaryAction={{
+          label: "End Call",
+          variant: "destructive",
+          onPress: () => {
+            setEndCallConfirmVisible(false);
+            handleEndCall("user_ended");
+          },
+        }}
+        secondaryAction={{
+          label: "Stay on Call",
+          variant: "secondary",
+          onPress: () => setEndCallConfirmVisible(false),
         }}
       />
 
@@ -1828,7 +2018,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(18, 20, 24, 0.50)",
     borderWidth: 0,
     overflow: "hidden",
-    gap: 12,
+    gap: 10,
+  },
+  headerBackBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
   },
   infoCardAvatarWrap: {
     borderRadius: 20,

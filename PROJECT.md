@@ -926,7 +926,7 @@ The ONLY real-money surface in the app. Two methods, both hardened:
   more..." text, always mounted so the list never jumps; new cards fill
   the space below)
 - ❌ Do **not** use `Linking.openURL` for "Rate Experience" to a fake review
-  prompt , it must open the actual Play Store listing for `com.amitnarwal.dreamdate`
+  prompt , it must open the actual Play Store listing for `com.bolona.videocall`
 - ❌ Do **not** ask permissions in a cold install dialog or scatter
   permission requests , funnel through the single `PermissionsPrimerModal`
 - ❌ Do **not** auto-deduct coins in the first 120 seconds of any call

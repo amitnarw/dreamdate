@@ -135,7 +135,7 @@ export default function UserProfileTab() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (e) {}
-    const pkg = "com.amitnarwal.dreamdate";
+    const pkg = "com.bolona.videocall";
     const marketUrl = `market://details?id=${pkg}`;
     const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
     try {
