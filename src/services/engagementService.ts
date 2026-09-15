@@ -13,7 +13,8 @@ import {
   safeSetNotificationChannelAsync,
 } from "./safeNotifications";
 
-const STATE_KEY = "@dreamdate_engagement_state_v2";
+const STATE_KEY = "@dreamdate_engagement_state_v4";
+const AUTH_STORAGE_KEY = "@dreamdate_auth_user_v1";
 const LAST_NOTIF_TS_KEY = "@dreamdate_last_engagement_notif_v1";
 const POST_DEPLETION_KEY = "@dreamdate_post_depletion_notif_v1";
 
@@ -85,8 +86,8 @@ async function ensureChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
   // Remove the legacy channel created with the invalid `sound: 'default'`
   // (idempotent no-op once gone).
-  await safeDeleteNotificationChannelAsync(LEGACY_CHANNEL_ID);
-  const importance = (await safeGetAndroidImportance()) ?? "high";
+  const Importance = await safeGetAndroidImportance();
+  const importance = Importance?.HIGH ?? 4;
   // NOTE: no `sound` key ,  omitting it is the documented way to get the
   // system default notification sound. Passing 'default' throws in builds
   // because the native module treats it as a custom bundled filename.
@@ -188,52 +189,50 @@ const LATE_PHOTO_TEXTS = [
 function buildSlots(
   profiles: Profile[],
 ): Omit<FunnelSlot, "notifId" | "delivered">[] {
-  const [p1, p2, p3] = profiles;
-  const slots: Omit<FunnelSlot, "notifId" | "delivered">[] = [
-    {
-      profileId: p1.id,
-      delaySec: 60,
-      kind: "text",
-      text: "heyy, kya kar rahe ho 😜",
-    },
-    {
-      profileId: p2.id,
-      delaySec: 120,
-      kind: "photo",
-      text: "tumhare liye ek surprise hai 👀",
-      ...funnelExclusive(p2),
-    },
-    {
-      profileId: p3.id,
-      delaySec: 180,
-      kind: "text",
-      text: "oye suno na, bore ho rahi hu",
-    },
-  ];
-  // Girls 4-10: each 10-20 min after the previous slot (randomized).
-  let cursor = 180;
-  let textIdx = Math.floor(Math.random() * LATE_SLOT_TEXTS.length);
-  let photoIdx = Math.floor(Math.random() * LATE_PHOTO_TEXTS.length);
-  for (let i = 3; i < profiles.length && i < 10; i++) {
-    cursor += jitterSec(600, 1200);
+  // Cadence:
+  // 1st chat at 5s
+  // 2nd chat 10s later (cumulative 15s)
+  // 3rd chat 20s later (cumulative 35s)
+  // After 35s: each 35s later, a new chat arrives from a different female
+  const intervals = [5, 10, 20, 35, 35, 35, 35, 35, 35, 35];
+  const slots: Omit<FunnelSlot, "notifId" | "delivered">[] = [];
+  let cumulativeSec = 0;
+  let textIdx = 0;
+  let photoIdx = 0;
+
+  const count = Math.min(profiles.length, intervals.length);
+  for (let i = 0; i < count; i++) {
+    cumulativeSec += intervals[i];
     const p = profiles[i];
-    if (PHOTO_SLOT_INDEXES.includes(i)) {
+    const isPhotoSlot = i === 1 || i === 4 || i === 7;
+    const hasLocked = (p.lockedPhotos ?? []).length > 0;
+
+    if (isPhotoSlot && hasLocked) {
       slots.push({
         profileId: p.id,
-        delaySec: cursor,
+        delaySec: cumulativeSec,
         kind: "photo",
-        text: LATE_PHOTO_TEXTS[photoIdx % LATE_PHOTO_TEXTS.length],
+        text:
+          i === 1
+            ? "tumhare liye ek surprise hai 👀"
+            : LATE_PHOTO_TEXTS[photoIdx % LATE_PHOTO_TEXTS.length],
         ...funnelExclusive(p),
       });
       photoIdx += 1;
     } else {
+      let text = "heyy, kya kar rahe ho 😜";
+      if (i === 1) text = "kya kar rahe ho, baat karo na 🙈";
+      else if (i === 2) text = "oye suno na, bore ho rahi hu";
+      else {
+        text = LATE_SLOT_TEXTS[textIdx % LATE_SLOT_TEXTS.length];
+        textIdx += 1;
+      }
       slots.push({
         profileId: p.id,
-        delaySec: cursor,
+        delaySec: cumulativeSec,
         kind: "text",
-        text: LATE_SLOT_TEXTS[textIdx % LATE_SLOT_TEXTS.length],
+        text,
       });
-      textIdx += 1;
     }
   }
   return slots;
@@ -241,7 +240,7 @@ function buildSlots(
 
 /**
  * Funnel photo source: a random lockedPhoto (true exclusive ,  never
- * gallery-visible) with ITS price. Falls back to gallery only if empty.
+ * gallery-visible) with ITS price. Falls back to free gallery photo with 0 cost only if empty.
  */
 function funnelExclusive(p: Profile): { photoUrl: string; unlockCost: number } {
   const locked = p.lockedPhotos ?? [];
@@ -251,12 +250,20 @@ function funnelExclusive(p: Profile): { photoUrl: string; unlockCost: number } {
   }
   return {
     photoUrl: p.photos?.[0] ?? p.avatar,
-    unlockCost: getPersonaConfig(p).unlockCost,
+    unlockCost: 0,
   };
 }
 
 async function runInit(): Promise<void> {
   if (!isOnline()) return; // Offline gate ,  don't run funnel while user is blocked
+
+  // Strict auth guard: Never run chat funnel if user has not logged in
+  try {
+    const auth = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+    if (!auth) return;
+  } catch {
+    return;
+  }
 
   let state = await readState();
   if (state.completed) return;
@@ -400,11 +407,11 @@ async function deliverSlot(index: number, timestamp?: number): Promise<void> {
       text: slot.text,
       timestamp: ts,
       status: "delivered",
-      type: "locked_photo",
+      type: (slot.unlockCost ?? 0) > 0 ? "locked_photo" : "photo",
       mediaUrl: slot.photoUrl,
-      isBlurred: true,
-      unlockCost: slot.unlockCost ?? PHOTO_UNLOCK_COST,
-      isUnlocked: false,
+      isBlurred: (slot.unlockCost ?? 0) > 0,
+      unlockCost: (slot.unlockCost ?? 0) > 0 ? slot.unlockCost : undefined,
+      isUnlocked: (slot.unlockCost ?? 0) === 0,
     });
     // "She's waiting" ping: 20-40 min later, if he STILL hasn't unlocked
     // her photo, she nudges him in-chat (drives the recharge decision).

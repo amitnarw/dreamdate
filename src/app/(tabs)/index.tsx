@@ -21,6 +21,7 @@ import AppHeader from "../../components/AppHeader";
 import AppModal from "../../components/AppModal";
 import RechargeModal from "../../components/RechargeModal";
 import SkeletonImage from "../../components/SkeletonImage";
+import { useAuth } from "../../context/AuthContext";
 import { useTabBlur } from "../../context/TabBlurContext";
 import { useTheme } from "../../context/ThemeContext";
 import { MOCK_PROFILES, Profile } from "../../data/mockProfiles";
@@ -35,6 +36,32 @@ function shuffleProfiles(input: Profile[]): Profile[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+const FIRST_LAUNCH_TOP_IDS = [
+  "girl-18", // img_18
+  "girl-23", // img_23
+  "girl-2",  // img_2
+  "girl-24", // img_24
+  "girl-8",  // img_8
+  "girl-29", // img_29
+  "girl-13", // img_13
+  "girl-25", // img_25
+  "girl-38", // img_38
+  "girl-26", // img_26
+];
+
+function getFirstLaunchProfiles(): Profile[] {
+  const topProfiles: Profile[] = [];
+  const topIdSet = new Set(FIRST_LAUNCH_TOP_IDS);
+  const remainingProfiles = MOCK_PROFILES.filter((p) => !topIdSet.has(p.id));
+
+  FIRST_LAUNCH_TOP_IDS.forEach((id) => {
+    const found = MOCK_PROFILES.find((p) => p.id === id);
+    if (found) topProfiles.push(found);
+  });
+
+  return [...topProfiles, ...shuffleProfiles(remainingProfiles)];
 }
 
 /**
@@ -273,15 +300,16 @@ function LoadMoreFooter({
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { targets, notifyTargetMounted } = useTabBlur();
   const [exitModalVisible, setExitModalVisible] = useState(false);
 
-  // Endless Profile List State. The 39 profiles are shuffled once at mount so
-  // each app launch surfaces a different order; ids stay stable so chat history,
-  // persona memory, etc. continue to resolve the same girl.
-  const shuffledBase = useMemo(() => shuffleProfiles(MOCK_PROFILES), []);
-  const [profilesList, setProfilesList] = useState<Profile[]>(shuffledBase);
+  const PAGE_SIZE = 10;
+  // 1st time on homepage: top 10 profiles are strictly curated (img_18, img_23, img_2, etc.)
+  // Subsequent app opens: randomized order. Only 10 loaded initially.
+  const [baseProfiles, setBaseProfiles] = useState<Profile[]>(() => getFirstLaunchProfiles());
+  const [profilesList, setProfilesList] = useState<Profile[]>(() => getFirstLaunchProfiles().slice(0, PAGE_SIZE));
   const [page, setPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -321,21 +349,44 @@ export default function HomeScreen() {
     }, [isVip]),
   );
 
+  // Check if first time opening home screen: keep curated order on 1st open, randomize afterwards
+  useEffect(() => {
+    (async () => {
+      try {
+        const AsyncStorage = (
+          await import("@react-native-async-storage/async-storage")
+        ).default;
+        const seen = await AsyncStorage.getItem("@dreamdate_first_home_seen_v1");
+        if (!seen) {
+          // 1st time opening homepage: keep the curated top 10 order and mark seen
+          await AsyncStorage.setItem("@dreamdate_first_home_seen_v1", "1");
+        } else {
+          // Subsequent app opens: randomize
+          const randomized = shuffleProfiles(MOCK_PROFILES);
+          setBaseProfiles(randomized);
+          setProfilesList(randomized.slice(0, PAGE_SIZE));
+          setPage(1);
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
   useEffect(() => {
     notifyTargetMounted();
     // Staggered prefetch: prefetch the first 12 visible avatars to disk so
     // grid items render instantly from disk cache.
-    warmAvatarCache(shuffledBase, 12, 150);
-  }, []);
+    warmAvatarCache(baseProfiles, 12, 150);
+  }, [baseProfiles]);
 
-  // Schedule first incoming call while user is browsing Discover
+  // Schedule incoming call only when user is logged in and browsing Discover
   useFocusEffect(
     useCallback(() => {
+      if (!user) return;
       incomingCallService.scheduleFirstIfEligible().catch(() => {});
       return () => {
         // Don't cancel here ,  if it fires the overlay handles it
       };
-    }, []),
+    }, [user]),
   );
 
   const handleLoadMore = () => {
@@ -344,16 +395,30 @@ export default function HomeScreen() {
 
     setTimeout(() => {
       const nextPage = page + 1;
-      const moreProfiles: Profile[] = shuffledBase.map((p, idx) => ({
-        ...p,
-        id: `${p.id}_p${nextPage}_${idx}`,
-        isOnline: Math.random() > 0.2,
-        totalCalls: p.totalCalls + Math.floor(Math.random() * 120) + 15,
-      }));
-      setProfilesList((prev) => [...prev, ...moreProfiles]);
+      const currentCount = profilesList.length;
+
+      // If we haven't shown all baseProfiles yet, take next 10 from baseProfiles
+      if (currentCount < baseProfiles.length) {
+        const nextBatch = baseProfiles.slice(currentCount, currentCount + PAGE_SIZE);
+        setProfilesList((prev) => [...prev, ...nextBatch]);
+      } else {
+        // Beyond initial list: loop back and generate next 10 with page suffix
+        const startIndex = ((nextPage - 1) * PAGE_SIZE) % baseProfiles.length;
+        const pool = [...baseProfiles, ...baseProfiles];
+        const nextBatch: Profile[] = pool
+          .slice(startIndex, startIndex + PAGE_SIZE)
+          .map((p, idx) => ({
+            ...p,
+            id: `${p.id}_p${nextPage}_${idx}`,
+            isOnline: Math.random() > 0.2,
+            totalCalls: p.totalCalls + Math.floor(Math.random() * 120) + 15,
+          }));
+        setProfilesList((prev) => [...prev, ...nextBatch]);
+      }
+
       setPage(nextPage);
       setIsLoadingMore(false);
-    }, 900);
+    }, 600);
   };
 
   useFocusEffect(

@@ -54,6 +54,7 @@ import {
   markCallFunnelFired,
   schedulePostDepletionReminder,
 } from "../../services/engagementService";
+import { incomingCallService } from "../../services/incomingCallService";
 import { deductCoins, getCoins, useWallet } from "../../services/wallet";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -242,6 +243,13 @@ export default function VideoCallScreen() {
       requestMicPermission();
     }
   }, [permission, micPermission]);
+
+  // When call ends or screen unmounts, resume recurring calls after 1 minute
+  useEffect(() => {
+    return () => {
+      incomingCallService.onCallEnded();
+    };
+  }, []);
 
   // Incoming path: she already rang and you accepted, so there is no
   // dial-out phase. Just a brief "connecting" beat, then live.

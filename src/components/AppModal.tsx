@@ -29,6 +29,7 @@ export interface AppModalProps {
   primaryAction?: AppModalAction;
   secondaryAction?: AppModalAction;
   useModalHost?: boolean;
+  stackedActions?: boolean;
 }
 
 export default function AppModal({
@@ -42,6 +43,7 @@ export default function AppModal({
   primaryAction,
   secondaryAction,
   useModalHost = true,
+  stackedActions = false,
 }: AppModalProps) {
   const { theme, isDark } = useTheme();
   const [isMounted, setIsMounted] = useState(visible);
@@ -177,11 +179,43 @@ export default function AppModal({
 
               {/* Action Buttons */}
               {(primaryAction || secondaryAction) && (
-                <View style={styles.actionsRow}>
+                <View style={stackedActions ? styles.actionsColumn : styles.actionsRow}>
+                  {primaryAction && (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        stackedActions && styles.actionBtnStacked,
+                        primaryAction.variant === 'destructive'
+                          ? styles.destructiveBtn
+                          : styles.primaryBtn,
+                      ]}
+                      onPress={() => {
+                        try {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        } catch (e) {}
+                        primaryAction.onPress();
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.actionBtnText,
+                          styles.primaryBtnText,
+                          stackedActions && styles.actionBtnTextStacked,
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {primaryAction.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   {secondaryAction && (
                     <TouchableOpacity
                       style={[
                         styles.actionBtn,
+                        stackedActions && styles.actionBtnStacked,
                         styles.secondaryBtn,
                         {
                           backgroundColor: isDark
@@ -201,36 +235,12 @@ export default function AppModal({
                         style={[
                           styles.actionBtnText,
                           { color: theme.colors.onSurfaceVariant },
+                          stackedActions && styles.secondaryBtnTextStacked,
                         ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
                       >
                         {secondaryAction.label}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {primaryAction && (
-                    <TouchableOpacity
-                      style={[
-                        styles.actionBtn,
-                        primaryAction.variant === 'destructive'
-                          ? styles.destructiveBtn
-                          : styles.primaryBtn,
-                      ]}
-                      onPress={() => {
-                        try {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        } catch (e) {}
-                        primaryAction.onPress();
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        style={[
-                          styles.actionBtnText,
-                          styles.primaryBtnText,
-                        ]}
-                      >
-                        {primaryAction.label}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -340,9 +350,30 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 15,
     fontWeight: '600',
+    paddingHorizontal: 8,
   },
   primaryBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  actionsColumn: {
+    flexDirection: 'column',
+    gap: 10,
+    width: '100%',
+    marginTop: 8,
+  },
+  actionBtnStacked: {
+    width: '100%',
+    flex: 0,
+    height: 48,
+    borderRadius: 24,
+  },
+  actionBtnTextStacked: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  secondaryBtnTextStacked: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

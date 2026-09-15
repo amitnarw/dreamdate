@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -19,6 +20,7 @@ import {
 import { incomingCallService } from '../services/incomingCallService';
 import { startRinging, stopRinging } from '../services/soundService';
 import { Profile } from '../data/mockProfiles';
+import { useAuth } from '../context/AuthContext';
 import { MEDIA_HEADERS } from '../services/videoService';
 import { getCoins } from '../services/wallet';
 import AppModal from './AppModal';
@@ -27,7 +29,7 @@ import RechargeModal from './RechargeModal';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /** Max time the incoming-call request rings before auto-cut (missed call). */
-const RING_TIMEOUT_MS = 2 * 60 * 1000;
+const RING_TIMEOUT_MS = 30 * 1000;
 
 /** Classic phone vibration cadence while ringing (loops until stopped). */
 const RING_VIBRATION_PATTERN = [0, 700, 800];
@@ -42,6 +44,7 @@ const RING_VIBRATION_PATTERN = [0, 700, 800];
  */
 export default function IncomingCallOverlay() {
   const router = useRouter();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
@@ -78,7 +81,14 @@ export default function IncomingCallOverlay() {
   }, []);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!user) {
+      stopRing();
+      setProfile(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!profile || !user) return;
 
     // Real call behavior: looping ringtone + repeating vibration
     startRinging().catch(() => {});
@@ -156,6 +166,9 @@ export default function IncomingCallOverlay() {
     if (p) incomingCallService.declined(p.id);
   };
 
+  // Never show incoming call if user is not logged in
+  if (!user) return null;
+
   return (
     <>
       <Modal
@@ -167,8 +180,31 @@ export default function IncomingCallOverlay() {
       >
         {profile ? (
           <View style={styles.overlay}>
+            {/* Full-screen background image of the female caller */}
+            <ExpoImage
+              source={{
+                uri:
+                  profile.lockedPhotos?.[0]?.url ||
+                  profile.coverImage ||
+                  profile.avatar,
+                headers: MEDIA_HEADERS,
+              }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={300}
+            />
+
+            {/* Dark gradient overlay so text and controls are clearly visible */}
+            <LinearGradient
+              colors={[
+                'rgba(0,0,0,0.65)',
+                'rgba(0,0,0,0.3)',
+                'rgba(0,0,0,0.85)',
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
             <BlurView
-              intensity={85}
+              intensity={25}
               tint="dark"
               style={StyleSheet.absoluteFill}
             />
@@ -246,6 +282,7 @@ export default function IncomingCallOverlay() {
 
       <AppModal
         visible={insufficientModalVisible}
+        stackedActions
         onClose={() => {
           setInsufficientModalVisible(false);
           if (pendingProfile) {

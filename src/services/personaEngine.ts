@@ -1354,7 +1354,7 @@ function exclusivePhoto(
       pool.length > 0
         ? pool[Math.floor(Math.random() * pool.length)]
         : profile.avatar,
-    cost: fallbackCost,
+    cost: 0,
     caption: "",
   };
 }
@@ -1372,16 +1372,19 @@ function rollPhotoOutcome(
   mem: GirlMemory,
   cfg: PersonaConfig,
   coins: number,
+  profile?: Profile,
 ): PhotoOutcome {
   mem.askedPhoto += 1;
   if (mem.askedPhoto >= 3) return "refuse_tease";
   const aff = mem.affection;
   const cost = cfg.unlockCost;
+  const hasLocked = (profile?.lockedPhotos ?? []).length > 0;
   // Wallet-aware: if he can't afford her price, greed steers to recharge
   const brokeBoost = coins < cost ? cfg.greed * 2 : 0;
 
+  let outcome: PhotoOutcome;
   if (aff < 20) {
-    return weighted<PhotoOutcome>([
+    outcome = weighted<PhotoOutcome>([
       ["demand_first", 0.35 + cfg.demandFirstP],
       ["dont_know_how", 0.2 + cfg.shyP],
       ["recharge_first", 0.15 + brokeBoost],
@@ -1389,9 +1392,8 @@ function rollPhotoOutcome(
       ["send_free", 0.1],
       ["send_locked", 0.05],
     ]);
-  }
-  if (aff < 50) {
-    return weighted<PhotoOutcome>([
+  } else if (aff < 50) {
+    outcome = weighted<PhotoOutcome>([
       ["send_free", 0.25],
       ["hesitant", 0.2 + cfg.shyP],
       ["demand_first", 0.15 + cfg.demandFirstP],
@@ -1399,15 +1401,22 @@ function rollPhotoOutcome(
       ["recharge_first", 0.1 + brokeBoost],
       ["dont_know_how", 0.08],
     ]);
+  } else {
+    outcome = weighted<PhotoOutcome>([
+      ["send_locked", 0.3 + cfg.sendPhotoP * 0.3],
+      ["send_free", 0.2],
+      ["hesitant", 0.15],
+      ["recharge_first", 0.12 + brokeBoost],
+      ["demand_first", 0.08],
+      ["dont_know_how", 0.05],
+    ]);
   }
-  return weighted<PhotoOutcome>([
-    ["send_locked", 0.3 + cfg.sendPhotoP * 0.3],
-    ["send_free", 0.2],
-    ["hesitant", 0.15],
-    ["recharge_first", 0.12 + brokeBoost],
-    ["demand_first", 0.08],
-    ["dont_know_how", 0.05],
-  ]);
+
+  // If female has no blocked photos, she must never send a locked photo
+  if (!hasLocked && outcome === "send_locked") {
+    return "send_free";
+  }
+  return outcome;
 }
 
 function rollCallOutcome(
@@ -1773,11 +1782,19 @@ async function planPhotoReply(
   mem: GirlMemory,
   coins: number,
 ): Promise<ReplyPlan> {
-  const outcome = rollPhotoOutcome(mem, cfg, coins);
+  const outcome = rollPhotoOutcome(mem, cfg, coins, profile);
   const locked = exclusivePhoto(profile, cfg.unlockCost);
   const freeUrl = freeGalleryPhoto(profile);
   const say = (o: PhotoOutcome) =>
     pickPool(PHOTO_LINES[o], arch, mem, `photo:${o}:${arch}`, "shuffle");
+
+  // If she has no locked photos, convert any locked outcome to send_free with cost 0
+  if (locked.cost === 0 && outcome === "send_locked") {
+    return buildPlan(mem, cfg, "photo_request", [say("send_free")], {
+      affectionDelta: 4,
+      photo: { url: freeUrl, cost: 0, caption: "" },
+    });
+  }
 
   switch (outcome) {
     case "send_locked":
@@ -1989,10 +2006,10 @@ export function schedulePlannedFollowUp(
           text: first || "ye lo 🙈",
           timestamp: Date.now(),
           status: "delivered",
-          type: "locked_photo",
+          type: followUp.photo.cost > 0 ? "locked_photo" : "photo",
           mediaUrl: followUp.photo.url,
           isBlurred: followUp.photo.cost > 0,
-          unlockCost: followUp.photo.cost,
+          unlockCost: followUp.photo.cost > 0 ? followUp.photo.cost : undefined,
           isUnlocked: followUp.photo.cost === 0,
         });
       } else {
@@ -2148,8 +2165,9 @@ export async function planProactivePing(
   const mem = await loadMemory(profile.id);
   const roll = Math.random();
   let ping: ProactivePing;
-  if (roll < 0.25) {
-    // Locked-photo tease ,  blurred exclusive that drives the unlock spend.
+  const hasLocked = (profile.lockedPhotos ?? []).length > 0;
+  if (roll < 0.25 && hasLocked) {
+    // Locked-photo tease - only for girls with blocked photos
     const owed = exclusivePhoto(profile, cfg.unlockCost);
     const caption = pickCorpus(
       "dirty_tease",

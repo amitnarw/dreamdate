@@ -120,10 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await initFirstRunEngagement();
       } catch (e) {}
 
-      // Anchor the first-install video call request to login (T+2 min).
-      // Discover focus re-arms it as a fallback; the service never resets
-      // a pending timer, so this is safe to call from both places.
+      // Reset call sequence and start 5-second countdown on home screen after Fast Login
       try {
+        incomingCallService.resetSequence();
         await incomingCallService.scheduleFirstIfEligible();
       } catch (e) {}
 
@@ -142,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
       cancelEngagementTimers();
+      incomingCallService.resetSequence();
       setUser(null);
       router.replace("/login" as any);
     } catch (e) {

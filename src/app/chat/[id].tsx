@@ -436,10 +436,7 @@ export default function PremiumChatScreen() {
                 (item.type === "photo" || item.type === "locked_photo") &&
                 item.mediaUrl
               ) {
-                const isLocked =
-                  !item.isUnlocked &&
-                  (item.type === "locked_photo" ||
-                    (item.type === "photo" && item.sender === "profile"));
+                const isLocked = item.type === "locked_photo" && !item.isUnlocked;
 
                 return (
                   <View
