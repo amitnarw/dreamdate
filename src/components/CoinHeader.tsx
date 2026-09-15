@@ -6,6 +6,6 @@ interface Props {
   showBack?: boolean;
 }
 
-export default function CoinHeader({ title = 'DreamDate', showBack = false }: Props) {
+export default function CoinHeader({ title = 'BoloNa', showBack = false }: Props) {
   return <AppHeader title={title} showBack={showBack} showCoins={true} />;
 }

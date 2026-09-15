@@ -53,7 +53,7 @@ export default function LoginScreen() {
       } catch (e) {}
       Alert.alert(
         'Agreement Required',
-        'Please confirm you are 18+ and accept the User Agreement & Privacy Policy to enter DreamDate.'
+        'Please confirm you are 18+ and accept the User Agreement & Privacy Policy to enter BoloNa.'
       );
       return;
     }
@@ -206,7 +206,7 @@ export default function LoginScreen() {
             {isLoggingIn ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.fastLoginBtnText}>Entering DreamDate...</Text>
+                <Text style={styles.fastLoginBtnText}>Entering BoloNa...</Text>
               </View>
             ) : (
               <LinearGradient
