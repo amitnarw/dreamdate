@@ -19,6 +19,7 @@ import {
 import { incomingCallService } from '../services/incomingCallService';
 import { startRinging, stopRinging } from '../services/soundService';
 import { Profile } from '../data/mockProfiles';
+import { MEDIA_HEADERS } from '../services/videoService';
 import { getCoins } from '../services/wallet';
 import AppModal from './AppModal';
 import RechargeModal from './RechargeModal';
@@ -178,7 +179,7 @@ export default function IncomingCallOverlay() {
               ]}
             >
               <ExpoImage
-                source={{ uri: profile.avatar }}
+                source={{ uri: profile.avatar, headers: MEDIA_HEADERS }}
                 style={styles.avatar}
                 contentFit="cover"
                 transition={200}

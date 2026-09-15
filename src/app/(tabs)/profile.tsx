@@ -6,7 +6,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -22,6 +21,7 @@ import AppModal from "../../components/AppModal";
 import CoinIcon from "../../components/CoinIcon";
 import DailyCheckInModal from "../../components/DailyCheckInModal";
 import DevSheetModal from "../../components/DevSheetModal";
+import SkeletonImage from "../../components/SkeletonImage";
 import LegalViewerModal from "../../components/LegalViewerModal";
 import RechargeModal from "../../components/RechargeModal";
 import { useAuth } from "../../context/AuthContext";
@@ -191,9 +191,10 @@ export default function UserProfileTab() {
                     <View style={styles.heroIdentityRow}>
                       <View style={styles.avatarWrap}>
                         {user?.avatar ? (
-                          <Image
-                            source={{ uri: user.avatar }}
+                          <SkeletonImage
+                            uri={user.avatar}
                             style={styles.avatarCircle}
+                            recyclingKey={user.avatar}
                           />
                         ) : (
                           <View
@@ -333,9 +334,10 @@ export default function UserProfileTab() {
                     <View style={styles.heroIdentityRow}>
                       <View style={styles.avatarWrap}>
                         {user?.avatar ? (
-                          <Image
-                            source={{ uri: user.avatar }}
+                          <SkeletonImage
+                            uri={user.avatar}
                             style={styles.avatarCircle}
+                            recyclingKey={user.avatar}
                           />
                         ) : (
                           <View

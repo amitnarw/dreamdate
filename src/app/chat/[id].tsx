@@ -6,7 +6,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +22,7 @@ import {
 } from "react-native-safe-area-context";
 import AppBackground from "../../components/AppBackground";
 import AppModal from "../../components/AppModal";
+import SkeletonImage from "../../components/SkeletonImage";
 import BackButton from "../../components/BackButton";
 import GiftModal from "../../components/GiftModal";
 import RechargeModal from "../../components/RechargeModal";
@@ -336,7 +336,7 @@ export default function PremiumChatScreen() {
               activeOpacity={0.8}
             >
               <View style={styles.avatarWrap}>
-                <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+                <SkeletonImage uri={profile.avatar} style={styles.avatar} recyclingKey={profile.avatar} />
                 <View style={styles.onlineDot} />
               </View>
               <View>
@@ -385,9 +385,10 @@ export default function PremiumChatScreen() {
                     activeOpacity={0.85}
                     onPress={() => setPreviewImage(imgUri)}
                   >
-                    <Image
-                      source={{ uri: imgUri }}
+                    <SkeletonImage
+                      uri={imgUri}
                       style={styles.galleryImage}
+                      recyclingKey={imgUri}
                     />
                   </TouchableOpacity>
                 ))}
@@ -395,9 +396,10 @@ export default function PremiumChatScreen() {
 
             {messages.length === 0 && (
               <View style={styles.emptyConversationWrap}>
-                <Image
-                  source={{ uri: profile.avatar }}
+                <SkeletonImage
+                  uri={profile.avatar}
                   style={styles.emptyConversationAvatar}
+                  recyclingKey={profile.avatar}
                 />
                 <Text
                   style={[
@@ -448,9 +450,10 @@ export default function PremiumChatScreen() {
                     ]}
                   >
                     {!isMe && (
-                      <Image
-                        source={{ uri: profile.avatar }}
+                      <SkeletonImage
+                        uri={profile.avatar}
                         style={styles.msgAvatar}
+                        recyclingKey={profile.avatar}
                       />
                     )}
                     <View style={[styles.mediaCol, isMe && styles.mediaColMe]}>
@@ -486,11 +489,12 @@ export default function PremiumChatScreen() {
                         }}
                         style={styles.imageCardWrap}
                       >
-                        <Image
-                          source={{ uri: item.mediaUrl }}
+                        <SkeletonImage
+                          uri={item.mediaUrl}
                           style={styles.imageCard}
-                          resizeMode="cover"
+                          contentFit="cover"
                           blurRadius={isLocked ? 12 : 0}
+                          recyclingKey={item.mediaUrl}
                         />
 
                         {isLocked && (
@@ -693,9 +697,10 @@ export default function PremiumChatScreen() {
                   ]}
                 >
                   {!isMe && (
-                    <Image
-                      source={{ uri: profile.avatar }}
+                    <SkeletonImage
+                      uri={profile.avatar}
                       style={styles.msgAvatar}
+                      recyclingKey={profile.avatar}
                     />
                   )}
                   {isMe ? (
@@ -775,10 +780,11 @@ export default function PremiumChatScreen() {
             {/* Typing Indicator */}
             {isTyping && (
               <View style={[styles.msgRow, styles.msgRowOther]}>
-                <Image
-                  source={{ uri: profile.avatar }}
-                  style={styles.msgAvatar}
-                />
+<SkeletonImage
+                uri={profile.avatar}
+                style={styles.msgAvatar}
+                recyclingKey={profile.avatar}
+              />
                 <View style={[styles.bubble, styles.bubbleOther]}>
                   <BlurView
                     intensity={50}
@@ -1069,10 +1075,11 @@ export default function PremiumChatScreen() {
               onPress={() => setPreviewImage(null)}
             >
               {previewImage && (
-                <Image
-                  source={{ uri: previewImage }}
+                <SkeletonImage
+                  uri={previewImage}
                   style={styles.fullScreenModalImage}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  recyclingKey={previewImage}
                 />
               )}
             </TouchableOpacity>

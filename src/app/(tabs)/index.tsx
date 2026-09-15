@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurTargetView } from "expo-blur";
+import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -19,11 +20,39 @@ import AppBackground from "../../components/AppBackground";
 import AppHeader from "../../components/AppHeader";
 import AppModal from "../../components/AppModal";
 import RechargeModal from "../../components/RechargeModal";
+import SkeletonImage from "../../components/SkeletonImage";
 import { useTabBlur } from "../../context/TabBlurContext";
 import { useTheme } from "../../context/ThemeContext";
 import { MOCK_PROFILES, Profile } from "../../data/mockProfiles";
 import { incomingCallService } from "../../services/incomingCallService";
+import { MEDIA_HEADERS } from "../../services/videoService";
 import { useWallet } from "../../services/wallet";
+
+function shuffleProfiles(input: Profile[]): Profile[] {
+  const arr = [...input];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Staggered disk-cache warm-up so the first viewport of the Discover grid is
+ * already loaded off disk by the time you scroll. Runs once per app open;
+ * expo-image prefetches are idempotent and free if the URL is already cached.
+ */
+function warmAvatarCache(profiles: Profile[], firstN: number, intervalMs: number): void {
+  const subset = profiles.slice(0, firstN);
+  const uris = Array.from(
+    new Set(subset.map((p) => p.avatar).filter(Boolean) as string[]),
+  );
+  uris.forEach((uri, i) => {
+    setTimeout(() => {
+      ExpoImage.prefetch([uri], { cachePolicy: "disk", headers: MEDIA_HEADERS }).catch(() => {});
+    }, i * intervalMs);
+  });
+}
 
 function GridProfileCard({
   item,
@@ -60,7 +89,14 @@ function GridProfileCard({
         ]}
       />
       {item.avatar ? (
-        <Image source={{ uri: item.avatar }} style={StyleSheet.absoluteFill} />
+        <SkeletonImage
+          uri={item.avatar}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="disk"
+          recyclingKey={item.avatar}
+          transition={120}
+        />
       ) : null}
 
       {/* Smooth Vertical Gradient Fade */}
@@ -241,8 +277,11 @@ export default function HomeScreen() {
   const { targets, notifyTargetMounted } = useTabBlur();
   const [exitModalVisible, setExitModalVisible] = useState(false);
 
-  // Endless Profile List State
-  const [profilesList, setProfilesList] = useState<Profile[]>(MOCK_PROFILES);
+  // Endless Profile List State. The 39 profiles are shuffled once at mount so
+  // each app launch surfaces a different order; ids stay stable so chat history,
+  // persona memory, etc. continue to resolve the same girl.
+  const shuffledBase = useMemo(() => shuffleProfiles(MOCK_PROFILES), []);
+  const [profilesList, setProfilesList] = useState<Profile[]>(shuffledBase);
   const [page, setPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -284,6 +323,9 @@ export default function HomeScreen() {
 
   useEffect(() => {
     notifyTargetMounted();
+    // Staggered prefetch: prefetch the first 12 visible avatars to disk so
+    // grid items render instantly from disk cache.
+    warmAvatarCache(shuffledBase, 12, 150);
   }, []);
 
   // Schedule first incoming call while user is browsing Discover
@@ -302,7 +344,7 @@ export default function HomeScreen() {
 
     setTimeout(() => {
       const nextPage = page + 1;
-      const moreProfiles: Profile[] = MOCK_PROFILES.map((p, idx) => ({
+      const moreProfiles: Profile[] = shuffledBase.map((p, idx) => ({
         ...p,
         id: `${p.id}_p${nextPage}_${idx}`,
         isOnline: Math.random() > 0.2,
@@ -359,6 +401,11 @@ export default function HomeScreen() {
             showsVerticalScrollIndicator={false}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
+            windowSize={7}
+            initialNumToRender={8}
+            maxToRenderPerBatch={6}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={true}
             ListHeaderComponent={
               <View>
                 <View style={styles.titleRow}>

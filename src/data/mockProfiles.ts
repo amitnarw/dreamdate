@@ -90,603 +90,163 @@ export interface Profile {
   lockedPhotos?: ProfileMediaItem[];
 }
 
-import { getAllVideoUrls } from '../services/videoService';
+import { getAllVideoUrls, getImageUrl } from '../services/videoService';
+import { getMediaForGirl } from './profileMedia';
 
 export const FAKE_CALL_VIDEOS: string[] = getAllVideoUrls();
 
+// Locked-photo pricing ladder (matches the persona unlock price tiers 30/40/50).
+const LOCKED_PRICES = [30, 30, 40, 40, 50, 50] as const;
 
-// STRICT 100% Female Verified Profiles (Zero male images)
-// All models are adults (21-35 look). Images: Pexels free license, hotlinked.
-// CONSISTENCY RULE: each girl's gallery is built from same-shoot series so
-// one profile = one face. Zero URL reuse across profiles (verified by script).
-// Free tier = glamour / traditional / casual. Locked tier = implied nude +
-// sheer lingerie (spiciest legally-hotlinkable register; verified 200s).
-const PX = (id: number) =>
-  `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=format&fit=crop&w=800&q=80`;
+interface ProfileSeed {
+  name: string;
+  age: number;
+  city: string;
+  country: string;
+  language: string[];
+  rating: number;
+  callRate: number;
+  tagline: string;
+  interests: string[];
+  bio: string;
+  archetype: CharacterArchetype;
+}
 
-export const MOCK_PROFILES: Profile[] = [
-  {
-    id: 'priya-1',
-    name: 'Priya Sharma',
-    age: 23,
-    city: 'Mumbai',
-    country: 'India',
-    language: ['Hindi', 'English'],
-    avatar: PX(11555683),
-    coverImage: PX(11555684),
-    photos: [
-      PX(11555685), PX(11555686), PX(11555687), PX(11555688), PX(11555689),
-    ],
-    rating: 4.9,
-    callRate: 50,
-    isOnline: true,
-    tagline: 'bandra girl, raat ko online milungi 😜',
-    interests: ['Bollywood', 'Dancing', 'Night drives', 'Coffee'],
-    videoUrl: FAKE_CALL_VIDEOS[0],
-    bio: 'bandra me rehti hu. late night baatein, flirty jokes aur thoda sa tadpana pasand hai. himmat hai to message karo 😜',
-    totalCalls: 3420,
-    archetype: 'playful_tease',
-    lockedPhotos: [
-      { id: 'photo_priya-1_1', url: PX(11555690), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_priya-1_2', url: PX(11555691), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_priya-1_3', url: PX(11555692), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_priya-1_4', url: PX(11555693), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_priya-1_5', url: PX(11555694), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'aisha-2',
-    name: 'Aisha Al-Hashmi',
-    age: 24,
-    city: 'Dubai',
-    country: 'UAE',
-    language: ['English', 'Hindi', 'Arabic'],
-    avatar: PX(36770811),
-    coverImage: PX(36770812),
-    photos: [
-      PX(36770813), PX(36770814), PX(36770815), PX(36770816), PX(36770817),
-    ],
-    rating: 5.0,
-    callRate: 100,
-    isOnline: true,
-    tagline: 'dubai marina | raat ko aur hot 🔥',
-    interests: ['Dubai Marina', 'Fashion', 'Luxury Cars', 'Cocktails'],
-    videoUrl: FAKE_CALL_VIDEOS[1],
-    bio: 'dubai me rehti hu. fashion, long drives aur garam baatein. confident ho to call pe aao 🔥',
-    totalCalls: 4890,
-    archetype: 'bold_alluring',
-    lockedPhotos: [
-      { id: 'photo_aisha-2_1', url: PX(36770818), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_aisha-2_2', url: PX(36770819), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_aisha-2_3', url: PX(36770820), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_aisha-2_4', url: PX(36770821), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_aisha-2_5', url: PX(36770822), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'simran-3',
-    name: 'Simran Kaur',
-    age: 22,
-    city: 'Chandigarh',
-    country: 'India',
-    language: ['Punjabi', 'Hindi', 'English'],
-    avatar: PX(17040864),
-    coverImage: PX(17040865),
-    photos: [
-      PX(17040866), PX(17040867), PX(17040868), PX(17040869), PX(17040870),
-    ],
-    rating: 4.8,
-    callRate: 60,
-    isOnline: true,
-    tagline: 'chandigarh | sharma ke tadpaungi 🌸',
-    interests: ['Music', 'Punjabi Songs', 'Cooking', 'Travel'],
-    videoUrl: FAKE_CALL_VIDEOS[2],
-    bio: 'chandigarh se hu. cooking, punjabi songs aur pyaar bhari baatein. thoda sharmaungi, phir sab kuch 🌸',
-    totalCalls: 2190,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_simran-3_1', url: PX(17040871), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_simran-3_2', url: PX(17040872), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_simran-3_3', url: PX(17040873), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_simran-3_4', url: PX(17040874), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_simran-3_5', url: PX(17040875), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'ananya-4',
-    name: 'Ananya Roy',
-    age: 25,
-    city: 'Kolkata',
-    country: 'India',
-    language: ['Bengali', 'Hindi', 'English'],
-    avatar: PX(20442916),
-    coverImage: PX(20442918),
-    photos: [
-      PX(20442920), PX(20442921), PX(20442922), PX(20442925), PX(20442926),
-    ],
-    rating: 4.9,
-    callRate: 120,
-    isOnline: true,
-    tagline: 'raat ko gehri aur garam baatein ✨',
-    interests: ['Poetry', 'Art', 'Night walks', 'Classic Cinema'],
-    videoUrl: FAKE_CALL_VIDEOS[3],
-    bio: 'kolkata se. poetry, purani films aur raat ki bechainiyan. gehri baat karni hai to aa jao ✨',
-    totalCalls: 2780,
-    archetype: 'mysterious_sensual',
-    lockedPhotos: [
-      { id: 'photo_ananya-4_1', url: PX(20442927), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_ananya-4_2', url: PX(20442929), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_ananya-4_3', url: PX(20442931), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_ananya-4_4', url: PX(20442933), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_ananya-4_5', url: PX(20442939), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'zara-5',
-    name: 'Zara Sheikh',
-    age: 23,
-    city: 'Lahore',
-    country: 'Pakistan',
-    language: ['Urdu', 'Hindi', 'English'],
-    avatar: PX(36114611),
-    coverImage: PX(36114612),
-    photos: [
-      PX(36114613), PX(36114614), PX(36114615), PX(36114616), PX(36114617),
-    ],
-    rating: 4.9,
-    callRate: 150,
-    isOnline: true,
-    tagline: 'lahore | naram lehja, garam baatein 🌸',
-    interests: ['Fashion Design', 'Chai', 'Singing', 'Romance'],
-    videoUrl: FAKE_CALL_VIDEOS[4],
-    bio: 'soft spoken hu par dil se baat karti hu. chai, romance aur raat bhar ki guftagu pasand hai 🌸',
-    totalCalls: 3100,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_zara-5_1', url: PX(36114618), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_zara-5_2', url: PX(36114619), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_zara-5_3', url: PX(36114620), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_zara-5_4', url: PX(36114621), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_zara-5_5', url: PX(36114622), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'tanya-6',
-    name: 'Tanya Mehta',
-    age: 26,
-    city: 'South Delhi',
-    country: 'India',
-    language: ['Hindi', 'English'],
-    avatar: PX(26731711),
-    coverImage: PX(26731712),
-    photos: [
-      PX(26731713), PX(26731714), PX(26731715), PX(26731716), PX(26731717),
-    ],
-    rating: 5.0,
-    callRate: 180,
-    isOnline: true,
-    tagline: 'delhi girl, bed pe bhi zero filter 🔥',
-    interests: ['Parties', 'Glamour', 'Fitness', 'Clubbing'],
-    videoUrl: FAKE_CALL_VIDEOS[5],
-    bio: 'south delhi se. parties, fitness aur khul ke sab kuch. boring log door rahein, naughty log paas aayein 🔥',
-    totalCalls: 5420,
-    archetype: 'bold_alluring',
-    lockedPhotos: [
-      { id: 'photo_tanya-6_1', url: PX(26731718), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_tanya-6_2', url: PX(26731720), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_tanya-6_3', url: PX(26731721), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_tanya-6_4', url: PX(26731722), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_tanya-6_5', url: PX(26731723), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'riya-7',
-    name: 'Riya Patel',
-    age: 24,
-    city: 'Ahmedabad',
-    country: 'India',
-    language: ['Gujarati', 'Hindi', 'English'],
-    avatar: PX(29805027),
-    coverImage: PX(29805028),
-    photos: [
-      PX(29805029), PX(29805037), PX(29805038), PX(29805039), PX(29805040),
-    ],
-    rating: 4.7,
-    callRate: 75,
-    isOnline: false,
-    tagline: 'busy hu, par raat ko full naughty 😜',
-    interests: ['Garba', 'Foodie', 'Selfies', 'Shopping'],
-    videoUrl: FAKE_CALL_VIDEOS[6],
-    bio: 'ahmedabad se hu. garba, khana, selfies aur thodi si shararat. free hote hi tadpa dungi 😜',
-    totalCalls: 1890,
-    archetype: 'playful_tease',
-    lockedPhotos: [
-      { id: 'photo_riya-7_1', url: PX(29805041), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_riya-7_2', url: PX(29805043), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_riya-7_3', url: PX(29805044), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_riya-7_4', url: PX(29805045), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_riya-7_5', url: PX(29805046), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'mehreen-8',
-    name: 'Mehreen Noor',
-    age: 22,
-    city: 'Dhaka',
-    country: 'Bangladesh',
-    language: ['Bengali', 'English', 'Hindi'],
-    avatar: PX(36226608),
-    coverImage: PX(36226609),
-    photos: [
-      PX(36226610), PX(36226611), PX(36226612), PX(36226613), PX(36226614),
-    ],
-    rating: 4.8,
-    callRate: 90,
-    isOnline: true,
-    tagline: 'shy hu, par sapno me wild 🌸',
-    interests: ['Literature', 'Photography', 'Music', 'Rainy Days'],
-    videoUrl: FAKE_CALL_VIDEOS[7],
-    bio: 'dhaka se. books, baarish aur purane gaane. dheere dheere khulungi, phir rukungi nahi 🌸',
-    totalCalls: 1940,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_mehreen-8_1', url: PX(36226615), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_mehreen-8_2', url: PX(36226616), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_mehreen-8_3', url: PX(36226617), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_mehreen-8_4', url: PX(36226618), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_mehreen-8_5', url: PX(36226619), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'natasha-9',
-    name: 'Natasha Kapoor',
-    age: 25,
-    city: 'Bengaluru',
-    country: 'India',
-    language: ['English', 'Hindi', 'Kannada'],
-    avatar: PX(34324374),
-    coverImage: PX(34324375),
-    photos: [
-      PX(34324376), PX(34324377), PX(34324378), PX(34324379), PX(34324380),
-    ],
-    rating: 4.9,
-    callRate: 200,
-    isOnline: true,
-    tagline: 'din me startup, raat ko sin ✨',
-    interests: ['Startups', 'Electronic Music', 'Travel', 'Wine'],
-    videoUrl: FAKE_CALL_VIDEOS[8],
-    bio: 'din me startup, raat ko music aur bechain travel plans. interesting logon ke saath interesting raatein ✨',
-    totalCalls: 3650,
-    archetype: 'mysterious_sensual',
-    lockedPhotos: [
-      { id: 'photo_natasha-9_1', url: PX(34324381), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_natasha-9_2', url: PX(34324382), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_natasha-9_3', url: PX(34324395), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_natasha-9_4', url: PX(34324397), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_natasha-9_5', url: PX(34324398), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'kavya-10',
-    name: 'Kavya Reddy',
-    age: 23,
-    city: 'Hyderabad',
-    country: 'India',
-    language: ['Telugu', 'Hindi', 'English'],
-    avatar: PX(36041185),
-    coverImage: PX(36041186),
-    photos: [
-      PX(36041189), PX(36041190), PX(36041191), PX(36041192), PX(36041195),
-    ],
-    rating: 4.9,
-    callRate: 140,
-    isOnline: true,
-    tagline: 'biryani jesi spicy, pyar me sweet 🌸',
-    interests: ['Biryani', 'Dance', 'Cinema', 'Selfies'],
-    videoUrl: FAKE_CALL_VIDEOS[9],
-    bio: 'hyderabad se. biryani jesi spicy, dil se sweet. mood off ho to baat kar lena, garam kar dungi 🌸',
-    totalCalls: 2840,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_kavya-10_1', url: PX(36041196), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_kavya-10_2', url: PX(36041197), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_kavya-10_3', url: PX(36041198), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_kavya-10_4', url: PX(36041199), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_kavya-10_5', url: PX(36041200), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'pooja-11',
-    name: 'Pooja Hegde',
-    age: 24,
-    city: 'Pune',
-    country: 'India',
-    language: ['Marathi', 'Hindi', 'English'],
-    avatar: PX(36951163),
-    coverImage: PX(36951164),
-    photos: [
-      PX(36951165), PX(36951166), PX(36951167), PX(36951168), PX(36951169),
-    ],
-    rating: 4.8,
-    callRate: 160,
-    isOnline: true,
-    tagline: 'trekking wali, bed pe bhi adventurous 😜',
-    interests: ['Trekking', 'Long Drives', 'Indie Rock', 'Coffee'],
-    videoUrl: FAKE_CALL_VIDEOS[10],
-    bio: 'modelling karti hu. long drives, coffee aur raat ki adventures. hi bolo, shuru karte hain 😜',
-    totalCalls: 2190,
-    archetype: 'playful_tease',
-    lockedPhotos: [
-      { id: 'photo_pooja-11_1', url: PX(36951170), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_pooja-11_2', url: PX(36951172), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_pooja-11_3', url: PX(36951174), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_pooja-11_4', url: PX(36951178), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_pooja-11_5', url: PX(36951179), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'alizeh-12',
-    name: 'Alizeh Khan',
-    age: 23,
-    city: 'Islamabad',
-    country: 'Pakistan',
-    language: ['Urdu', 'English'],
-    avatar: PX(27317236),
-    coverImage: PX(27317237),
-    photos: [
-      PX(27317238), PX(27317239), PX(27317240), PX(27317241), PX(27317242),
-    ],
-    rating: 5.0,
-    callRate: 220,
-    isOnline: true,
-    tagline: 'ghazals, chai aur dheemi aanch 🌸',
-    interests: ['Art', 'Classical Ghazals', 'Poetry', 'Travel'],
-    videoUrl: FAKE_CALL_VIDEOS[11],
-    bio: 'purane ghazals, poetry aur dheemi aanch wali baatein. sukoon se tadpane wale log achhe lagte hain 🌸',
-    totalCalls: 3410,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_alizeh-12_1', url: PX(27317243), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_alizeh-12_2', url: PX(27317244), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_alizeh-12_3', url: PX(27317245), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_alizeh-12_4', url: PX(27317246), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_alizeh-12_5', url: PX(27317249), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'sonia-13',
-    name: 'Sonia D’Souza',
-    age: 22,
-    city: 'Goa',
-    country: 'India',
-    language: ['English', 'Hindi', 'Konkani'],
-    avatar: PX(38532713),
-    coverImage: PX(38532714),
-    photos: [
-      PX(38532715), PX(38532716), PX(38532717), PX(38532718), PX(38532719),
-    ],
-    rating: 4.9,
-    callRate: 250,
-    isOnline: true,
-    tagline: 'goa | bikini me beach, bed pe wild 😜',
-    interests: ['Beaches', 'Electronic Music', 'Cocktails', 'Bikinis'],
-    videoUrl: FAKE_CALL_VIDEOS[12],
-    bio: 'goa se. beach, music, late night parties aur subah tak ki masti. life ko lightly, mujhe tightly 😜',
-    totalCalls: 4120,
-    archetype: 'playful_tease',
-    lockedPhotos: [
-      { id: 'photo_sonia-13_1', url: PX(38532720), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_sonia-13_2', url: PX(38532721), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_sonia-13_3', url: PX(38532722), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_sonia-13_4', url: PX(38532723), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_sonia-13_5', url: PX(38532724), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'diya-14',
-    name: 'Diya Sen',
-    age: 25,
-    city: 'Jaipur',
-    country: 'India',
-    language: ['Hindi', 'Rajasthani', 'English'],
-    avatar: PX(7685492),
-    coverImage: PX(7685493),
-    photos: [
-      PX(7685494), PX(7685495), PX(7685496), PX(7685497), PX(7685498),
-    ],
-    rating: 4.9,
-    callRate: 280,
-    isOnline: true,
-    tagline: 'jaipur | royal andaaz, naughty iraade ✨',
-    interests: ['Palaces', 'Traditional Fashion', 'Photography', 'Royalty'],
-    videoUrl: FAKE_CALL_VIDEOS[13],
-    bio: 'jaipur se. photography, traditional fashion aur raat ke shahi shauk. tameez se tadpana aata hai ✨',
-    totalCalls: 2950,
-    archetype: 'mysterious_sensual',
-    lockedPhotos: [
-      { id: 'photo_diya-14_1', url: PX(7685499), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_diya-14_2', url: PX(7685500), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_diya-14_3', url: PX(7685501), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_diya-14_4', url: PX(7685502), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_diya-14_5', url: PX(7685503), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'shreya-15',
-    name: 'Shreya Verma',
-    age: 24,
-    city: 'Lucknow',
-    country: 'India',
-    language: ['Hindi', 'Urdu', 'English'],
-    avatar: PX(8856215),
-    coverImage: PX(8856216),
-    photos: [
-      PX(8856217), PX(8856218), PX(8856219), PX(8856220), PX(8856221),
-    ],
-    rating: 4.8,
-    callRate: 300,
-    isOnline: true,
-    tagline: 'tehzeeb se tadpaungi 🌸',
-    interests: ['Kebabs', 'Chikankari', 'Shayari', 'Music'],
-    videoUrl: FAKE_CALL_VIDEOS[14],
-    bio: 'lucknow se. kebabs, shayari, music aur adaa se bechain karna. tehzeeb se baat karo, neend uda dungi 🌸',
-    totalCalls: 2280,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_shreya-15_1', url: PX(8856222), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_shreya-15_2', url: PX(8856223), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_shreya-15_3', url: PX(8856224), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_shreya-15_4', url: PX(8856225), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_shreya-15_5', url: PX(8856226), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'nadia-16',
-    name: 'Nadia Qureshi',
-    age: 26,
-    city: 'Karachi',
-    country: 'Pakistan',
-    language: ['Urdu', 'Sindhi', 'English'],
-    avatar: PX(12121436),
-    coverImage: PX(12121437),
-    photos: [
-      PX(12121438), PX(12121439), PX(12121440), PX(12121441), PX(12121442),
-    ],
-    rating: 4.9,
-    callRate: 350,
-    isOnline: true,
-    tagline: 'karachi | stylist hu, kapde utarna bhi aata hai 🔥',
-    interests: ['Fashion Runways', 'Luxury Cafes', 'Driving', 'Perfumes'],
-    videoUrl: FAKE_CALL_VIDEOS[15],
-    bio: 'stylist hu. fashion, perfumes, long drives aur raat bhar ka high voltage. energy match karo 🔥',
-    totalCalls: 4530,
-    archetype: 'bold_alluring',
-    lockedPhotos: [
-      { id: 'photo_nadia-16_1', url: PX(12121443), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_nadia-16_2', url: PX(12121444), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_nadia-16_3', url: PX(12121445), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_nadia-16_4', url: PX(12121446), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_nadia-16_5', url: PX(12121447), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'fariha-17',
-    name: 'Fariha Rahman',
-    age: 23,
-    city: 'Dhaka',
-    country: 'Bangladesh',
-    language: ['Bengali', 'English'],
-    avatar: PX(39299420),
-    coverImage: PX(39299421),
-    photos: [
-      PX(39299423), PX(39299424), PX(39299425), PX(39299426), PX(39299427),
-    ],
-    rating: 4.8,
-    callRate: 380,
-    isOnline: true,
-    tagline: 'sarson ke khet jesi, andar se aag 🌸',
-    interests: ['Rabindra Sangeet', 'Painting', 'Tea', 'Rain'],
-    videoUrl: FAKE_CALL_VIDEOS[16],
-    bio: 'dhaka se. painting, chai, baarish aur bheegi raatein. sunne wale sabse zyada tadapte hain 🌸',
-    totalCalls: 1870,
-    archetype: 'sweet_romantic',
-    lockedPhotos: [
-      { id: 'photo_fariha-17_1', url: PX(39299428), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_fariha-17_2', url: PX(39299429), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_fariha-17_3', url: PX(39299430), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_fariha-17_4', url: PX(39299431), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_fariha-17_5', url: PX(39299433), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'zoya-18',
-    name: 'Zoya Mirza',
-    age: 24,
-    city: 'Downtown Dubai',
-    country: 'UAE',
-    language: ['English', 'Hindi', 'Arabic'],
-    avatar: PX(36424181),
-    coverImage: PX(36424182),
-    photos: [
-      PX(36424183), PX(36424184), PX(36424185), PX(36424186), PX(36424187),
-    ],
-    rating: 5.0,
-    callRate: 420,
-    isOnline: true,
-    tagline: 'dubai | dinner ke baad dessert main 🔥',
-    interests: ['Fine Dining', 'Yachting', 'Champagne', 'Luxury'],
-    videoUrl: FAKE_CALL_VIDEOS[17],
-    bio: 'dubai me rehti hu. good food, achhi company aur uske baad jo hota hai. boring mat hona bas 🔥',
-    totalCalls: 5120,
-    archetype: 'bold_alluring',
-    lockedPhotos: [
-      { id: 'photo_zoya-18_1', url: PX(36424188), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_zoya-18_2', url: PX(36424189), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_zoya-18_3', url: PX(36424190), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_zoya-18_4', url: PX(36424191), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_zoya-18_5', url: PX(36424192), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  // 10% International
-  {
-    id: 'emily-19',
-    name: 'Emily Watson',
-    age: 24,
-    city: 'London',
-    country: 'UK',
-    language: ['English'],
-    avatar: PX(13807168),
-    coverImage: PX(13807171),
-    photos: [
-      PX(13807172), PX(13807173), PX(13807174), PX(13807175), PX(13807176),
-    ],
-    rating: 4.9,
-    callRate: 460,
-    isOnline: true,
-    tagline: 'london | sarcasm ke saath seduction 😜',
-    interests: ['British Pop', 'Cocktails', 'Fashion', 'Art'],
-    videoUrl: FAKE_CALL_VIDEOS[18],
-    bio: 'london se. cheeky humour, achhi playlist aur raat ko thodi si naughtiness. desi boys sabse zyada mazedaar 😜',
-    totalCalls: 4120,
-    archetype: 'playful_tease',
-    lockedPhotos: [
-      { id: 'photo_emily-19_1', url: PX(13807177), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_emily-19_2', url: PX(13807178), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_emily-19_3', url: PX(13807179), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_emily-19_4', url: PX(13807181), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_emily-19_5', url: PX(13807182), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
-  {
-    id: 'camille-20',
-    name: 'Camille Laurent',
-    age: 23,
-    city: 'Paris',
-    country: 'France',
-    language: ['French', 'English'],
-    avatar: PX(32744417),
-    coverImage: PX(32744418),
-    photos: [
-      PX(32744420), PX(32744421), PX(32744422), PX(32744425), PX(32744427),
-    ],
-    rating: 4.9,
-    callRate: 500,
-    isOnline: true,
-    tagline: 'paris | l’amour, but make it naughty ✨',
-    interests: ['Croissants', 'Art Museums', 'Wine', 'Romance'],
-    videoUrl: FAKE_CALL_VIDEOS[19],
-    bio: 'paris se. art, wine, romance aur aadhi raat ki shararatein. english me tadpati hu ✨',
-    totalCalls: 3890,
-    archetype: 'mysterious_sensual',
-    lockedPhotos: [
-      { id: 'photo_camille-20_1', url: PX(32744428), isBlurred: true, unlockCostCoins: 30, caption: 'sirf tumhare liye 😏' },
-      { id: 'photo_camille-20_2', url: PX(32744431), isBlurred: true, unlockCostCoins: 30, caption: 'jhook ke dekho na 🙈' },
-      { id: 'photo_camille-20_3', url: PX(32744432), isBlurred: true, unlockCostCoins: 40, caption: 'special angle, poori feel 💋' },
-      { id: 'photo_camille-20_4', url: PX(32744436), isBlurred: true, unlockCostCoins: 40, caption: 'mood ban gaya 🔥' },
-      { id: 'photo_camille-20_5', url: PX(32744437), isBlurred: true, unlockCostCoins: 50, caption: 'haath jahan hai, nazar wahin 💋' },
-    ],
-  },
+const SEEDS: readonly ProfileSeed[] = [
+  // 1
+  { name: 'Priya Sharma', age: 23, city: 'Mumbai', country: 'India', language: ['Hindi', 'English'], rating: 4.9, callRate: 120, tagline: 'chai aur tere baare mein baatein ☕', interests: ['poetry', 'bollywood music', 'street food'], bio: 'Maharashtra ki chatori, late-night video mein milti hu. Mujhe apni voice bhej, baat karenge dil ki.', archetype: 'sweet_romantic' },
+  // 2
+  { name: 'Aisha Khan', age: 25, city: 'Dubai', country: 'UAE', language: ['Hindi', 'Urdu', 'English'], rating: 4.8, callRate: 150, tagline: 'thodi masti thodi baatein 😏', interests: ['luxury shopping', 'travel', 'fashion'], bio: 'Dubai ki shaan, tera intezaar. Late night pe aati hu, jaanna toh call kar.', archetype: 'bold_alluring' },
+  // 3
+  { name: 'Meera Joshi', age: 24, city: 'Pune', country: 'India', language: ['Hindi', 'English', 'Marathi'], rating: 4.7, callRate: 100, tagline: 'sun rahi hu tumhe…', interests: ['reading', 'coffee shops', 'trekking'], bio: 'Pune se, par dil tumhare paas. Subah ki chai ke saath milna chahti hu.', archetype: 'mysterious_sensual' },
+  // 4
+  { name: 'Riya Verma', age: 22, city: 'Delhi', country: 'India', language: ['Hindi', 'English'], rating: 4.6, callRate: 90, tagline: 'free hu aaj 😉', interests: ['street food', 'instagram reels', 'cats'], bio: 'Delhi ki dehliz se, teri screen pe. Aaja baat karein, bore ho rahi hu.', archetype: 'playful_tease' },
+  // 5
+  { name: 'Sneha Iyer', age: 26, city: 'Chennai', country: 'India', language: ['English', 'Tamil', 'Hindi'], rating: 4.8, callRate: 130, tagline: 'south indian swag ✨', interests: ['carnatic music', 'filter coffee', 'saree shopping'], bio: 'Filter coffee piyogi mere saath? Chennai se, par rajneeti mein, dil chhota.', archetype: 'sweet_romantic' },
+  // 6
+  { name: 'Kavya Reddy', age: 23, city: 'Hyderabad', country: 'India', language: ['Telugu', 'Hindi', 'English'], rating: 4.7, callRate: 110, tagline: 'biryani date kab? 🍛', interests: ['biryani', 'cricket', 'k-dramas'], bio: 'Hyderabadi biryani aur tera intezaar — dono favourite hain.', archetype: 'playful_tease' },
+  // 7
+  { name: 'Nisha Kapoor', age: 27, city: 'Bangalore', country: 'India', language: ['English', 'Hindi', 'Kannada'], rating: 4.9, callRate: 180, tagline: 'work hard, flirt harder 💼', interests: ['startups', 'wine bars', 'yoga'], bio: 'Silicon Valley of India ka dil soft, par apps pe strict. Call kar, jaana.', archetype: 'bold_alluring' },
+  // 8
+  { name: 'Tanvi Singh', age: 24, city: 'Chandigarh', country: 'India', language: ['Hindi', 'Punjabi', 'English'], rating: 4.6, callRate: 95, tagline: 'parli-g walon ki pyaari 💋', interests: ['diljit dosanjh', 'gym', 'gol gappa'], bio: 'Chandigarh se hoon, late-night dil chori. Aaja teri baari.', archetype: 'bold_alluring' },
+  // 9
+  { name: 'Anjali Patel', age: 22, city: 'Ahmedabad', country: 'India', language: ['Hindi', 'Gujarati', 'English'], rating: 4.5, callRate: 85, tagline: 'dhokla ke saath selfie 📸', interests: ['garba', 'mangoes', 'photography'], bio: 'Gujju girl with proper tadka. Teri photo dekhi, ab teri awaaz chahiye.', archetype: 'sweet_romantic' },
+  // 10
+  { name: 'Rhea Malhotra', age: 25, city: 'Kolkata', country: 'India', language: ['Bengali', 'Hindi', 'English'], rating: 4.7, callRate: 115, tagline: 'rosogolla romance 🍰', interests: ['rabindra sangeet', 'mishti doi', 'adda at ghat'], bio: 'City of Joy ki chhori, par raat jo tera intezaar karti hai woh alag hai.', archetype: 'mysterious_sensual' },
+  // 11
+  { name: 'Ishita Roy', age: 26, city: 'Lucknow', country: 'India', language: ['Hindi', 'Urdu'], rating: 4.8, callRate: 140, tagline: 'tunday kabab se zyada tedi 😜', interests: ['poetry', 'tunday', 'shayari'], bio: 'Lucknow ki adaa, awaaz mein tedi baatein. Aaja raat ki mehfil mein.', archetype: 'playful_tease' },
+  // 12
+  { name: 'Pooja Nair', age: 23, city: 'Kochi', country: 'India', language: ['Malayalam', 'English', 'Hindi'], rating: 4.6, callRate: 100, tagline: 'backwaters & boys 🌴', interests: ['kerala sadya', 'kathakali', 'beach sunsets'], bio: 'God’s own country ki pari, kam se kam raat ko. Call kar na.', archetype: 'sweet_romantic' },
+  // 13
+  { name: 'Sanya Bedi', age: 24, city: 'Jaipur', country: 'India', language: ['Hindi', 'English', 'Rajasthani'], rating: 4.7, callRate: 125, tagline: 'pink city pink mood 💗', interests: ['rajasthani folk', 'jewellery', 'street shopping'], bio: 'Pink city se hoon, par mood hamesha mere haath mein. Bol, kab miloge?', archetype: 'playful_tease' },
+  // 14
+  { name: 'Maya D\'Souza', age: 22, city: 'Goa', country: 'India', language: ['English', 'Konkani', 'Hindi'], rating: 4.5, callRate: 80, tagline: 'beach babe alert 🏖️', interests: ['beach clubs', 'feni', 'sunset selfies'], bio: 'Goa ki shaan, late-night beach vibes. Aaja mere samundar mein.', archetype: 'playful_tease' },
+  // 15
+  { name: 'Tanya Saxena', age: 27, city: 'Indore', country: 'India', language: ['Hindi', 'English'], rating: 4.8, callRate: 155, tagline: 'sarafa bhi, tu bhi, dono favourite 🍬', interests: ['indori poha', 'street food tours', 'true crime podcasts'], bio: 'Indori by birth, foodie by choice. Baat karein, recipe bhi sunaungi.', archetype: 'sweet_romantic' },
+  // 16
+  { name: 'Aditi Bhatt', age: 23, city: 'Surat', country: 'India', language: ['Hindi', 'Gujarati'], rating: 4.6, callRate: 95, tagline: 'diamond polish, dil neela 💎', interests: ['diamonds', 'shopping', 'surat locho'], bio: 'Surat ki diamond, teri screen pe chamak. Late night mithai date?', archetype: 'mysterious_sensual' },
+  // 17
+  { name: 'Kritika Chauhan', age: 25, city: 'Dehradun', country: 'India', language: ['Hindi', 'English'], rating: 4.7, callRate: 120, tagline: 'pahadon ka pyaar 🌿', interests: ['trekking', 'morning walks', 'tea estates'], bio: 'Pahadi hawa aur pahari baatein. Tujhe ghar bulati hu, chalega?', archetype: 'sweet_romantic' },
+  // 18
+  { name: 'Neha Aggarwal', age: 26, city: 'Gurgaon', country: 'India', language: ['Hindi', 'English'], rating: 4.9, callRate: 175, tagline: 'corporate by day, naughty by night 🌙', interests: ['workout', 'cocktails', 'thriller novels'], bio: 'Gurgaon ki skyline dekhi hai, teri aankhon ki nahi. Aaja call pe.', archetype: 'bold_alluring' },
+  // 19
+  { name: 'Simran Kaur', age: 24, city: 'Amritsar', country: 'India', language: ['Punjabi', 'Hindi', 'English'], rating: 4.6, callRate: 105, tagline: 'golden temple, golden heart 💛', interests: ['sikh history', 'langar', 'bhangra'], bio: 'Punjaban di soni kudi, late-night vibe tera intezaar kardi. Call karde.', archetype: 'playful_tease' },
+  // 20
+  { name: 'Jiya Sharma', age: 22, city: 'Noida', country: 'India', language: ['Hindi', 'English'], rating: 4.5, callRate: 85, tagline: 'PG waali, party wali 🍷', interests: ['house parties', 'reels', 'momos'], bio: 'Noida ki tower wali, hearts ki queen. Late-night baatein guarantee.', archetype: 'playful_tease' },
+  // 21
+  { name: 'Aliya Sheikh', age: 25, city: 'Karachi', country: 'Pakistan', language: ['Urdu', 'Hindi', 'English'], rating: 4.7, callRate: 110, tagline: 'sukoon wali baatein 🌙', interests: ['qawwali', 'desi food', 'romance novels'], bio: 'Karachi se hoon, dil mein bhai nahi, sirf tu. Raat ki baatein karein?', archetype: 'mysterious_sensual' },
+  // 22
+  { name: 'Myra Fernandes', age: 23, city: 'Mangalore', country: 'India', language: ['English', 'Hindi', 'Tulu'], rating: 4.5, callRate: 90, tagline: 'coastal crush 🌊', interests: ['beach', 'cafe hopping', 'photography'], bio: 'Mangalore ki breezy girl, screen pe bhi breeze laati hu.', archetype: 'sweet_romantic' },
+  // 23
+  { name: 'Nikita Rao', age: 28, city: 'Mumbai', country: 'India', language: ['Hindi', 'English'], rating: 4.9, callRate: 200, tagline: 'fashion week wali 🔥', interests: ['modelling', 'travel', 'fine dining'], bio: 'Runway to your room. Mumbai ki hottest, screen pe bhi unbothered.', archetype: 'bold_alluring' },
+  // 24
+  { name: 'Suhana Mirza', age: 24, city: 'Srinagar', country: 'India', language: ['Hindi', 'Kashmiri', 'English'], rating: 4.7, callRate: 115, tagline: 'chinar leaves & heartbeats 🍁', interests: ['shikara rides', 'kashmiri shawls', 'snowfall'], bio: 'Jannat ki beti, screen pe bhi heavenly vibes. Aaja dil ki raftaar mein.', archetype: 'mysterious_sensual' },
+  // 25
+  { name: 'Trisha Hegde', age: 26, city: 'Hubli', country: 'India', language: ['Kannada', 'English', 'Hindi'], rating: 4.6, callRate: 100, tagline: 'north karnataka queen 👑', interests: ['traditional sarees', 'temples', 'bisi bele bath'], bio: 'Simple town se, par style international. Late-night mein confused hoge.', archetype: 'sweet_romantic' },
+  // 26
+  { name: 'Bhavna Pandit', age: 23, city: 'Bhopal', country: 'India', language: ['Hindi', 'English'], rating: 4.5, callRate: 85, tagline: 'lake city queen 🪷', interests: ['poetry', 'boat rides', 'bhopali gosht'], bio: 'Bhopal ki shaan, teri screen pe mehman. Chai pe bulani hai?', archetype: 'sweet_romantic' },
+  // 27
+  { name: 'Zoya Qureshi', age: 25, city: 'Patna', country: 'India', language: ['Hindi', 'Urdu'], rating: 4.6, callRate: 105, tagline: 'litti chokha aur cute baatein 🫶', interests: ['bihari cuisine', 'history', 'ghats'], bio: 'Patna ki nazakat, teri screen pe mehfil. Aaja dil ki ghat pe.', archetype: 'bold_alluring' },
+  // 28
+  { name: 'Lavanya Pillai', age: 24, city: 'Trivandrum', country: 'India', language: ['Malayalam', 'English'], rating: 4.7, callRate: 115, tagline: 'kerala kathakali vibes 🎭', interests: ['classical dance', 'beach', 'tea'], bio: 'God’s own country ki classical dancer. Call mein bhi nachti hu.', archetype: 'mysterious_sensual' },
+  // 29
+  { name: 'Rashi Goel', age: 23, city: 'Meerut', country: 'India', language: ['Hindi', 'English'], rating: 4.5, callRate: 90, tagline: 'ganna aur gyaan 🌾', interests: ['agriculture', 'education', 'street food'], bio: 'Simple town ki smart girl. Tera intezaar raat bhar karti hu.', archetype: 'sweet_romantic' },
+  // 30
+  { name: 'Ishani Bhalla', age: 25, city: 'Chandigarh', country: 'India', language: ['Hindi', 'English', 'Punjabi'], rating: 4.7, callRate: 125, tagline: 'sector 17 ki shehzaadi 🌆', interests: ['shopping', 'food blogs', 'late-night drives'], bio: 'Chandigarh ki suarwy girl, teri screen pe aati hu at 12 sharp.', archetype: 'playful_tease' },
+  // 31
+  { name: 'Srishti Joshi', age: 22, city: 'Dehradun', country: 'India', language: ['Hindi', 'English', 'Garhwali'], rating: 4.4, callRate: 80, tagline: 'pahadi pep 🌲', interests: ['yoga', 'tea', 'trekking'], bio: 'Paani wali girl. Baat karein toh, ek ladki mile na mile.', archetype: 'sweet_romantic' },
+  // 32
+  { name: 'Palak Mehta', age: 24, city: 'Rajkot', country: 'India', language: ['Hindi', 'Gujarati', 'English'], rating: 4.6, callRate: 100, tagline: 'gujju naari 🔥', interests: ['gujarati thali', 'festivals', 'gym'], bio: 'Rajkot ki raani, late-night wali baatein tujhe hi karti hu.', archetype: 'bold_alluring' },
+  // 33
+  { name: 'Komal Yadav', age: 23, city: 'Hisar', country: 'India', language: ['Hindi', 'Haryanvi'], rating: 4.5, callRate: 85, tagline: 'desi kudi, modern vibe 🐎', interests: ['horses', 'farming', 'rap music'], bio: 'Haryana ki sherni. Phone uthati hu, dekhti hu kaun.', archetype: 'playful_tease' },
+  // 34
+  { name: 'Tara Khanna', age: 27, city: 'Mumbai', country: 'India', language: ['Hindi', 'English'], rating: 4.8, callRate: 165, tagline: 'late night lawyer 🔥', interests: ['wine bars', 'high court drama', 'travel'], bio: 'Lawyer by profession, naughty by choice. Court mein late-night mein.', archetype: 'bold_alluring' },
+  // 35
+  { name: 'Aanya Shroff', age: 22, city: 'Vadodara', country: 'India', language: ['Hindi', 'Gujarati', 'English'], rating: 4.5, callRate: 90, tagline: 'barodian butterfly 🦋', interests: ['museums', 'classical music', 'chai'], bio: 'Vadodara ki laadli. Tera aana banta hai ab.', archetype: 'sweet_romantic' },
+  // 36
+  { name: 'Vidhi Lalwani', age: 24, city: 'Jodhpur', country: 'India', language: ['Hindi', 'English'], rating: 4.6, callRate: 105, tagline: 'blue city pink mood 💙', interests: ['marwari cuisine', 'forts', 'sunsets'], bio: 'Jodhpur ki shaan, screen pe tera intezaar. Aaja blue city mein.', archetype: 'mysterious_sensual' },
+  // 37
+  { name: 'Meher Khan', age: 25, city: 'Lucknow', country: 'India', language: ['Urdu', 'Hindi', 'English'], rating: 4.7, callRate: 120, tagline: 'lucknowi tehzeeb ✨', interests: ['shayari', 'qawwali nights', 'kebabs'], bio: 'Lucknow ki shayrana. Late-night mehfil mein aaja.', archetype: 'sweet_romantic' },
+  // 38
+  { name: 'Saanvi Khurana', age: 26, city: 'Delhi', country: 'India', language: ['Hindi', 'English'], rating: 4.8, callRate: 145, tagline: 'delhi 6 dikhti hai 💃', interests: ['designer wear', 'champagne brunches', 'travel'], bio: 'Delhi ki sultana. Late-night romance, sirf tujhse.', archetype: 'bold_alluring' },
+  // 39
+  { name: 'Riya Sengupta', age: 24, city: 'Kolkata', country: 'India', language: ['Bengali', 'Hindi', 'English'], rating: 4.7, callRate: 125, tagline: 'mishti doi ke saath date 🍯', interests: ['adda', 'rabindranath tagore', 'bengali sweets'], bio: 'City of Joy ki last princess. Aaja, teri baari.', archetype: 'mysterious_sensual' },
 ];
+
+function buildProfile(seedIndex: number): Profile {
+  const seed = SEEDS[seedIndex];
+  const media = getMediaForGirl(seedIndex + 1);
+  const freeUrls = media.free.map((f) => getImageUrl(f));
+  const lockedUrls = media.locked.map((f) => getImageUrl(f));
+
+  const avatar = freeUrls[0];
+  const coverImage = freeUrls.length > 1 ? freeUrls[1] : freeUrls[0];
+  const photos = freeUrls.length > 1 ? freeUrls.slice(1) : [];
+
+  const lockedPhotos: ProfileMediaItem[] = lockedUrls.map((url, idx) => ({
+    id: `photo_girl-${seedIndex + 1}_${media.locked[idx]}`,
+    url,
+    isBlurred: true,
+    unlockCostCoins: LOCKED_PRICES[idx] ?? 50,
+    caption: 'sirf tumhare liye 😏',
+  }));
+
+  return {
+    id: `girl-${seedIndex + 1}`,
+    name: seed.name,
+    age: seed.age,
+    city: seed.city,
+    country: seed.country,
+    language: [...seed.language],
+    avatar,
+    photos,
+    coverImage,
+    rating: seed.rating,
+    callRate: seed.callRate,
+    isOnline: true,
+    tagline: seed.tagline,
+    interests: [...seed.interests],
+    videoUrl: FAKE_CALL_VIDEOS[seedIndex % FAKE_CALL_VIDEOS.length],
+    bio: seed.bio,
+    totalCalls: 1200 + seedIndex * 37,
+    archetype: seed.archetype,
+    lockedPhotos: lockedPhotos.length > 0 ? lockedPhotos : undefined,
+  };
+}
+
+export const MOCK_PROFILES: Profile[] = SEEDS.map((_, i) => buildProfile(i));
+
+// Re-exports for legacy callers (kept stable).
+export const ALL_PROFILES: Profile[] = MOCK_PROFILES;
+export function getProfileById(id: string): Profile | undefined {
+  return MOCK_PROFILES.find((p) => p.id === id);
+}
+
+export { getImageUrl } from '../services/videoService';
+
+// =============================================================================
+// Virtual Gifts (unchanged from v2 ;  decorative, remote, no media binding)
+// =============================================================================
 
 export interface VirtualGift {
   id: string;
@@ -710,7 +270,7 @@ export const VIRTUAL_GIFTS: VirtualGift[] = [
   { id: 'chocolate', name: 'Belgian Truffles', emoji: '🍫', icon: 'gift', image: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?auto=format&fit=crop&w=600&q=80', coins: 75, category: 'Popular', description: 'Rich cocoa truffles', accentColor: '#A855F7', glowColor: 'rgba(168, 85, 247, 0.4)' },
   { id: 'wine', name: 'Cabernet Wine', emoji: '🍷', icon: 'wine', image: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=600&q=80', coins: 100, category: 'Popular', description: 'Aged French vintage', accentColor: '#E11D48', glowColor: 'rgba(225, 29, 72, 0.4)' },
 
-  // 2. ROMANTIC (Heartfelt, intimate, affectionate)
+  // 2. ROMANTIC
   { id: 'bouquet', name: '100 Red Roses', emoji: '💐', icon: 'flower', image: 'https://images.unsplash.com/photo-1561181286-d3fee7d55364?auto=format&fit=crop&w=600&q=80', coins: 150, category: 'Romantic', description: '100 velvety roses', accentColor: '#FF1493', glowColor: 'rgba(255, 20, 147, 0.45)' },
   { id: 'teddy', name: 'Cuddle Bear', emoji: '🧸', icon: 'happy', image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=600&q=80', coins: 200, category: 'Romantic', description: 'Soft plush teddy bear', accentColor: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.4)' },
   { id: 'musicbox', name: 'Crystal Music Box', emoji: '🎶', icon: 'musical-notes', image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80', coins: 300, category: 'Romantic', description: 'Crystal love melody', accentColor: '#D946EF', glowColor: 'rgba(217, 70, 239, 0.4)' },
@@ -718,7 +278,7 @@ export const VIRTUAL_GIFTS: VirtualGift[] = [
   { id: 'loveletter', name: 'Love in a Bottle', emoji: '💌', icon: 'mail-unread', image: 'https://images.unsplash.com/photo-1579208575657-c595a053b9b7?auto=format&fit=crop&w=600&q=80', coins: 600, category: 'Romantic', description: 'Poetic handwritten scroll', accentColor: '#FB7185', glowColor: 'rgba(251, 113, 133, 0.45)' },
   { id: 'nightwear', name: 'French Silk Robe', emoji: '👗', icon: 'sparkles', image: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?auto=format&fit=crop&w=600&q=80', coins: 800, category: 'Romantic', description: 'Pure Mulberry silk', accentColor: '#E879F9', glowColor: 'rgba(232, 121, 249, 0.45)' },
 
-  // 3. LUXURY (Glamour, high roller, status)
+  // 3. LUXURY
   { id: 'perfume', name: 'Chanel No. 5', emoji: '💎', icon: 'flask', image: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=600&q=80', coins: 500, category: 'Luxury', description: 'Parisian haute parfum', accentColor: '#38BDF8', glowColor: 'rgba(56, 189, 248, 0.4)' },
   { id: 'bangle', name: 'Cartier Gold Bangle', emoji: '✨', icon: 'shield-checkmark', image: 'https://images.unsplash.com/photo-1611591477439-d378b8a5d3f2?auto=format&fit=crop&w=600&q=80', coins: 1000, category: 'Luxury', description: 'Signature 18K gold band', accentColor: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.5)' },
   { id: 'birkin', name: 'Hermès Birkin', emoji: '👜', icon: 'bag-handle', image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80', coins: 1500, category: 'Luxury', description: 'Exotic leather tote', accentColor: '#FB923C', glowColor: 'rgba(251, 146, 60, 0.5)' },
@@ -726,7 +286,7 @@ export const VIRTUAL_GIFTS: VirtualGift[] = [
   { id: 'ring', name: 'Diamond Ring', emoji: '💍', icon: 'disc', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=600&q=80', coins: 3000, category: 'Luxury', description: '3-carat platinum diamond', accentColor: '#67E8F9', glowColor: 'rgba(103, 232, 249, 0.5)' },
   { id: 'choker', name: 'Diamond Choker', emoji: '📿', icon: 'sparkles', image: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?auto=format&fit=crop&w=600&q=80', coins: 4500, category: 'Luxury', description: 'Emerald-cut diamonds', accentColor: '#818CF8', glowColor: 'rgba(129, 140, 248, 0.5)' },
 
-  // 4. VIP (Billionaire tier, ultra-exclusive)
+  // 4. VIP
   { id: 'supercar', name: 'Neon Supercar', emoji: '🏎️', icon: 'car-sport', image: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=600&q=80', coins: 3500, category: 'VIP', description: '750HP twin-turbo beast', accentColor: '#EF4444', glowColor: 'rgba(239, 68, 68, 0.5)' },
   { id: 'jet', name: 'Private Luxury Jet', emoji: '✈️', icon: 'airplane', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80', coins: 6000, category: 'VIP', description: 'Gulfstream private charter', accentColor: '#60A5FA', glowColor: 'rgba(96, 165, 250, 0.5)' },
   { id: 'yacht', name: 'Monaco Mega Yacht', emoji: '🛥️', icon: 'boat', image: 'https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=600&q=80', coins: 8000, category: 'VIP', description: '200ft superyacht with helipad', accentColor: '#34D399', glowColor: 'rgba(52, 211, 153, 0.5)' },

@@ -8,7 +8,6 @@ import {
   Animated,
   Dimensions,
   FlatList,
-  Image,
   LayoutChangeEvent,
   ScrollView,
   StyleSheet,
@@ -23,6 +22,7 @@ import AppHeader from '../../components/AppHeader';
 import AppModal from '../../components/AppModal';
 import CoinIcon from '../../components/CoinIcon';
 import RechargeModal from '../../components/RechargeModal';
+import SkeletonImage from '../../components/SkeletonImage';
 import { MOCK_PROFILES } from '../../data/mockProfiles';
 import { StitchTheme } from '../../constants/theme';
 import { useTabBlur } from '../../context/TabBlurContext';
@@ -36,6 +36,7 @@ import {
   ChatThreadItem,
   getActiveChatThreads,
   markChatAsRead,
+  subscribeNewMessages,
 } from '../../services/chatEngine';
 import { useWallet } from '../../services/wallet';
 
@@ -118,6 +119,16 @@ export default function MessageCenterHistory() {
       loadRealData();
     }, [])
   );
+
+  // Live-update: any girl-sent message delivered while history is open
+  // triggers a re-read so the list reflects the new preview + unread state.
+  useEffect(() => {
+    const unsub = subscribeNewMessages((_profileId, msg) => {
+      if (msg.sender !== "profile") return;
+      loadRealData();
+    });
+    return unsub;
+  }, []);
 
   const handleTabPress = (tab: TabType) => {
     setActiveTab(tab);
@@ -315,10 +326,10 @@ export default function MessageCenterHistory() {
                           <View style={styles.avatarWrap}>
                             {item.unread ? (
                               <View style={styles.storyRingActive}>
-                                <Image source={{ uri: item.avatar }} style={styles.avatarImg} />
+                                <SkeletonImage uri={item.avatar} style={styles.avatarImg} recyclingKey={item.avatar} />
                               </View>
                             ) : (
-                              <Image source={{ uri: item.avatar }} style={styles.avatarImgPlain} />
+                              <SkeletonImage uri={item.avatar} style={styles.avatarImgPlain} recyclingKey={item.avatar} />
                             )}
                             <View style={styles.onlineBadgeDot} />
                           </View>
@@ -418,7 +429,7 @@ export default function MessageCenterHistory() {
                           onPress={() => handleCallPress(item.profileId, item.name)}
                           activeOpacity={0.8}
                         >
-                          <Image source={{ uri: item.avatar }} style={styles.callAvatar} />
+                          <SkeletonImage uri={item.avatar} style={styles.callAvatar} recyclingKey={item.avatar} />
 
                           <View style={styles.callInfo}>
                             <Text

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CoinIcon from '../components/CoinIcon';
 import LegalViewerModal from '../components/LegalViewerModal';
+import SkeletonImage from '../components/SkeletonImage';
 import { useAuth } from '../context/AuthContext';
 import { MOCK_PROFILES } from '../data/mockProfiles';
 
@@ -75,10 +76,11 @@ export default function LoginScreen() {
       {/* Mood Imagery with Deep Atmospheric Vignette */}
       <View style={styles.backgroundWrap}>
         {heroAvatar && (
-          <Image
-            source={{ uri: heroAvatar }}
+          <SkeletonImage
+            uri={heroAvatar}
             style={styles.heroImage}
             blurRadius={6}
+            cachePolicy="memory-disk"
           />
         )}
       </View>

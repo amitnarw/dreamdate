@@ -10,12 +10,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEventListener } from "expo";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
   Dimensions,
-  Image,
   Keyboard,
   Modal,
   Platform,
@@ -36,6 +35,7 @@ import AppModal from "../../components/AppModal";
 import CoinIcon from "../../components/CoinIcon";
 import GiftModal from "../../components/GiftModal";
 import RechargeModal from "../../components/RechargeModal";
+import SkeletonImage from "../../components/SkeletonImage";
 import { useTheme } from "../../context/ThemeContext";
 import {
   FAKE_CALL_VIDEOS,
@@ -44,6 +44,7 @@ import {
   VIRTUAL_GIFTS
 } from "../../data/mockProfiles";
 import { saveCallLog } from "../../services/callHistoryService";
+import { MEDIA_HEADERS } from "../../services/videoService";
 import {
   ChatMessage,
   generatePostCallFollowUp,
@@ -215,7 +216,12 @@ export default function VideoCallScreen() {
 
   // Video player setup (loops indefinitely for fake video call)
   const selectedVideoUrl = profile.videoUrl || FAKE_CALL_VIDEOS[0];
-  const player = useVideoPlayer(selectedVideoUrl, (p) => {
+  // Auth travels via the X-App-Key header (key is obfuscated in appKeys.ts).
+  const videoSource = useMemo(
+    () => ({ uri: selectedVideoUrl, headers: MEDIA_HEADERS }),
+    [selectedVideoUrl],
+  );
+  const player = useVideoPlayer(videoSource, (p) => {
     p.loop = true;
     p.muted = false;
   });
@@ -723,10 +729,11 @@ export default function VideoCallScreen() {
   if (callState === "connecting") {
     return (
       <View style={styles.ringingContainer}>
-        <Image
-          source={{ uri: profile.avatar }}
+        <SkeletonImage
+          uri={profile.avatar}
           style={StyleSheet.absoluteFill}
           blurRadius={38}
+          recyclingKey={profile.avatar}
         />
         <LinearGradient
           colors={[
@@ -741,9 +748,10 @@ export default function VideoCallScreen() {
           edges={["top", "bottom"]}
         >
           <Text style={styles.connectingDirLabel}>Incoming video call</Text>
-          <Image
-            source={{ uri: profile.avatar }}
+          <SkeletonImage
+            uri={profile.avatar}
             style={styles.connectingAvatar}
+            recyclingKey={profile.avatar}
           />
           <Text style={styles.connectingName}>{profile.name}</Text>
           <Text style={styles.connectingStatus}>Connecting...</Text>
@@ -755,10 +763,11 @@ export default function VideoCallScreen() {
   if (callState === "ringing") {
     return (
       <View style={styles.ringingContainer}>
-        <Image
-          source={{ uri: profile.avatar }}
+        <SkeletonImage
+          uri={profile.avatar}
           style={StyleSheet.absoluteFill}
           blurRadius={38}
+          recyclingKey={profile.avatar}
         />
         <LinearGradient
           colors={[
@@ -856,9 +865,10 @@ export default function VideoCallScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.avatarGradientBorder}
               >
-                <Image
-                  source={{ uri: profile.avatar }}
+                <SkeletonImage
+                  uri={profile.avatar}
                   style={styles.ringingAvatar}
+                  recyclingKey={profile.avatar}
                 />
               </LinearGradient>
             </Animated.View>
@@ -963,9 +973,10 @@ export default function VideoCallScreen() {
           style={[styles.endedContainer, { backgroundColor: "transparent" }]}
         >
           <SafeAreaView style={styles.endedContent} edges={["top", "bottom"]}>
-            <Image
-              source={{ uri: profile.avatar }}
+            <SkeletonImage
+              uri={profile.avatar}
               style={styles.endedAvatar}
+              recyclingKey={profile.avatar}
             />
             <Text
               style={[
@@ -1434,9 +1445,10 @@ export default function VideoCallScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Image
-              source={{ uri: profile.avatar }}
+            <SkeletonImage
+              uri={profile.avatar}
               style={styles.infoCardAvatar}
+              recyclingKey={profile.avatar}
             />
           </TouchableOpacity>
 
@@ -1871,10 +1883,11 @@ export default function VideoCallScreen() {
           <View style={styles.compactProfileContent}>
             {/* The Compact Profile Card */}
             <View style={styles.compactProfileCard}>
-              <Image
-                source={{ uri: selectedModalPhoto || profile.avatar }}
+              <SkeletonImage
+                uri={selectedModalPhoto || profile.avatar}
                 style={StyleSheet.absoluteFill}
-                resizeMode="cover"
+                contentFit="cover"
+                recyclingKey={selectedModalPhoto || profile.avatar}
               />
 
               {/* Top Row: Close button on left, Status badge on right */}
@@ -1962,10 +1975,11 @@ export default function VideoCallScreen() {
                       }}
                       activeOpacity={0.85}
                     >
-                      <Image
-                        source={{ uri }}
+                      <SkeletonImage
+                        uri={uri}
                         style={styles.compactThumbImg}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        recyclingKey={uri}
                       />
                     </TouchableOpacity>
                   );

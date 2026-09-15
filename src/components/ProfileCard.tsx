@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Profile } from "../data/mockProfiles";
+import { MEDIA_HEADERS } from "../services/videoService";
 import { useWallet } from "../services/wallet";
 import AppModal from "./AppModal";
 import RechargeModal from "./RechargeModal";
@@ -37,7 +38,7 @@ export default function ProfileCard({ profile }: Props) {
         activeOpacity={0.9}
         onPress={() => router.push(`/profile/${profile.id}` as any)}
       >
-        <Image source={{ uri: profile.avatar }} style={styles.image} />
+        <Image source={{ uri: profile.avatar, headers: MEDIA_HEADERS }} style={styles.image} />
 
         {/* Online Pulse Badge */}
         {profile.isOnline && (

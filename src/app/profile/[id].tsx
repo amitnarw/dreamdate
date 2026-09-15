@@ -25,8 +25,10 @@ import AppModal from "../../components/AppModal";
 import BackButton from "../../components/BackButton";
 import GiftModal from "../../components/GiftModal";
 import RechargeModal from "../../components/RechargeModal";
+import SkeletonImage from "../../components/SkeletonImage";
 import { useTheme } from "../../context/ThemeContext";
 import { MOCK_PROFILES, Profile, ProfileMediaItem, VIRTUAL_GIFTS } from "../../data/mockProfiles";
+import { MEDIA_HEADERS } from "../../services/videoService";
 import { deductCoins, useWallet } from "../../services/wallet";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -52,9 +54,7 @@ export default function UserProfileDetail1to1() {
   // Active photo gallery state isolated strictly to this companion
   const photoList = [
     profile.avatar,
-    ...(profile.photos && profile.photos.length > 0
-      ? profile.photos
-      : [profile.coverImage || profile.avatar]),
+    ...(profile.photos ?? []),
   ].filter((v, i, a) => !!v && a.indexOf(v) === i);
 
   type GalleryItem =
@@ -70,12 +70,12 @@ export default function UserProfileDetail1to1() {
   useEffect(() => {
     photoList.forEach((uri) => {
       if (uri) {
-        ExpoImage.prefetch(uri);
+        ExpoImage.prefetch([uri], { cachePolicy: "memory-disk", headers: MEDIA_HEADERS });
       }
     });
     (profile.lockedPhotos ?? []).forEach((lp) => {
       if (lp.url) {
-        ExpoImage.prefetch(lp.url);
+        ExpoImage.prefetch([lp.url], { cachePolicy: "memory-disk", headers: MEDIA_HEADERS });
       }
     });
   }, [profile.id]);
@@ -347,7 +347,7 @@ export default function UserProfileDetail1to1() {
               style={StyleSheet.absoluteFill}
             >
               <ExpoImage
-                source={{ uri: selectedPhoto }}
+                source={{ uri: selectedPhoto, headers: MEDIA_HEADERS }}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 cachePolicy="memory-disk"
@@ -523,10 +523,11 @@ export default function UserProfileDetail1to1() {
                     }}
                     activeOpacity={0.85}
                   >
-                    <Image
-                      source={{ uri: item.url }}
+                    <ExpoImage
+                      source={{ uri: item.url, headers: MEDIA_HEADERS }}
                       style={styles.thumbnailImg}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                       blurRadius={14}
                     />
                     <View style={styles.lockedThumbOverlay}>
@@ -570,11 +571,12 @@ export default function UserProfileDetail1to1() {
                   onPress={() => handleSelectPhoto(uri)}
                   activeOpacity={0.85}
                 >
-                  <ExpoImage
-                    source={{ uri }}
+                  <SkeletonImage
+                    uri={uri}
                     style={styles.thumbnailImg}
                     contentFit="cover"
                     cachePolicy="memory-disk"
+                    recyclingKey={uri}
                   />
                 </TouchableOpacity>
               );
