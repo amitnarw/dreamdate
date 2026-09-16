@@ -51,7 +51,7 @@ const FIRST_LAUNCH_TOP_IDS = [
   "girl-26", // img_26
 ];
 
-function getFirstLaunchProfiles(): Profile[] {
+function getTop10Profiles(shuffleTop: boolean = false): Profile[] {
   const topProfiles: Profile[] = [];
   const topIdSet = new Set(FIRST_LAUNCH_TOP_IDS);
   const remainingProfiles = MOCK_PROFILES.filter((p) => !topIdSet.has(p.id));
@@ -61,7 +61,16 @@ function getFirstLaunchProfiles(): Profile[] {
     if (found) topProfiles.push(found);
   });
 
-  return [...topProfiles, ...shuffleProfiles(remainingProfiles)];
+  const orderedTop = shuffleTop ? shuffleProfiles(topProfiles) : topProfiles;
+  return [...orderedTop, ...shuffleProfiles(remainingProfiles)];
+}
+
+function getAllRandomizedProfiles(): Profile[] {
+  return shuffleProfiles(MOCK_PROFILES);
+}
+
+function getFirstLaunchProfiles(): Profile[] {
+  return getTop10Profiles(false);
 }
 
 /**
@@ -314,7 +323,8 @@ export default function HomeScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // VIP teaser strip ,  shown from 2nd session onward if not VIP, dismissible
-  const { coins, isVip } = useWallet();
+  const { coins, isVip, hasPurchased } = useWallet();
+  const isPaidUser = Boolean(hasPurchased || isVip);
   const [showVipTeaser, setShowVipTeaser] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
   const [lowBalanceAlert, setLowBalanceAlert] = useState<{
@@ -349,27 +359,67 @@ export default function HomeScreen() {
     }, [isVip]),
   );
 
-  // Check if first time opening home screen: keep curated order on 1st open, randomize afterwards
+  // Profile ordering rule:
+  // - Until user does any recharge or buys membership plan, the top 10 best profiles
+  //   remain on top and only those 10 images randomize within themselves.
+  // - Once recharge or membership plan is bought, the whole list of profiles (39 total) randomizes.
   useEffect(() => {
     (async () => {
       try {
         const AsyncStorage = (
           await import("@react-native-async-storage/async-storage")
         ).default;
-        const seen = await AsyncStorage.getItem("@dreamdate_first_home_seen_v1");
-        if (!seen) {
-          // 1st time opening homepage: keep the curated top 10 order and mark seen
-          await AsyncStorage.setItem("@dreamdate_first_home_seen_v1", "1");
-        } else {
-          // Subsequent app opens: randomize
-          const randomized = shuffleProfiles(MOCK_PROFILES);
+        const purchased = await AsyncStorage.getItem("@dreamdate_has_purchased_v1");
+        const vipRaw = await AsyncStorage.getItem("@dreamdate_user_vip_v2");
+        const vipExp = vipRaw ? parseInt(vipRaw, 10) : 0;
+        const isPaid = purchased === "true" || vipExp > Date.now();
+
+        if (isPaid) {
+          // Paid user: randomize whole 39 profiles across the board
+          const randomized = getAllRandomizedProfiles();
           setBaseProfiles(randomized);
           setProfilesList(randomized.slice(0, PAGE_SIZE));
           setPage(1);
+        } else {
+          const seen = await AsyncStorage.getItem("@dreamdate_first_home_seen_v1");
+          if (!seen) {
+            // 1st time opening homepage: keep curated top 10 order and mark seen
+            await AsyncStorage.setItem("@dreamdate_first_home_seen_v1", "1");
+            const curated = getTop10Profiles(false);
+            setBaseProfiles(curated);
+            setProfilesList(curated.slice(0, PAGE_SIZE));
+            setPage(1);
+          } else {
+            // Subsequent opens before recharge / membership:
+            // Top 10 images remain on top and only those 10 randomize in itself
+            const top10Randomized = getTop10Profiles(true);
+            setBaseProfiles(top10Randomized);
+            setProfilesList(top10Randomized.slice(0, PAGE_SIZE));
+            setPage(1);
+          }
         }
       } catch (e) {}
     })();
   }, []);
+
+  // Reactive transition: when user completes a recharge or buys VIP membership during an active session
+  const prevPaidRef = useRef(isPaidUser);
+  useEffect(() => {
+    if (!prevPaidRef.current && isPaidUser) {
+      // User just recharged or bought membership plan: whole 39 profiles randomize!
+      const randomized = getAllRandomizedProfiles();
+      setBaseProfiles(randomized);
+      setProfilesList(randomized.slice(0, PAGE_SIZE));
+      setPage(1);
+    } else if (prevPaidRef.current && !isPaidUser) {
+      // Reverted to unpaid (e.g. dev wallet reset): restore top 10 on top
+      const top10Randomized = getTop10Profiles(true);
+      setBaseProfiles(top10Randomized);
+      setProfilesList(top10Randomized.slice(0, PAGE_SIZE));
+      setPage(1);
+    }
+    prevPaidRef.current = isPaidUser;
+  }, [isPaidUser]);
 
   useEffect(() => {
     notifyTargetMounted();

@@ -154,9 +154,8 @@ export const devActions = {
     notify();
   },
   resetWallet: async (): Promise<void> => {
-    const mod = await import("@react-native-async-storage/async-storage");
-    const AS = (mod as any).default ?? mod;
-    await AS.setItem("@dreamdate_user_coins_v2", "50");
+    const { resetWalletState } = await import("./wallet");
+    await resetWalletState();
     notify();
   },
   resetRepeatLedger: async (): Promise<void> => {

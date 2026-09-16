@@ -121,6 +121,18 @@ export async function activateWeeklyVip(
   notifyListeners();
 }
 
+export async function resetWalletState(): Promise<void> {
+  currentCoins = INITIAL_COINS;
+  currentVipExpiresAt = null;
+  currentHasPurchased = false;
+  try {
+    await AsyncStorage.setItem(WALLET_KEY, currentCoins.toString());
+    await AsyncStorage.removeItem(VIP_STORAGE_KEY);
+    await AsyncStorage.removeItem(HAS_PURCHASED_KEY);
+  } catch (e) {}
+  notifyListeners();
+}
+
 function notifyListeners() {
   const isVip = isVipActive();
   listeners.forEach((l) => l(currentCoins, isVip, currentHasPurchased));

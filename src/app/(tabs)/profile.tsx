@@ -20,7 +20,6 @@ import AppHeader from "../../components/AppHeader";
 import AppModal from "../../components/AppModal";
 import CoinIcon from "../../components/CoinIcon";
 import DailyCheckInModal from "../../components/DailyCheckInModal";
-import DevSheetModal from "../../components/DevSheetModal";
 import SkeletonImage from "../../components/SkeletonImage";
 import LegalViewerModal from "../../components/LegalViewerModal";
 import RechargeModal from "../../components/RechargeModal";
@@ -47,7 +46,6 @@ export default function UserProfileTab() {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [loggedOutNoticeVisible, setLoggedOutNoticeVisible] = useState(false);
   const [lowBalanceModalVisible, setLowBalanceModalVisible] = useState(false);
-  const [devSheetVisible, setDevSheetVisible] = useState(false);
 
   const LAST_NUDGE_KEY = "@dreamdate_last_nudge_v1";
   const CHECKIN_AUTO_KEY = "@dreamdate_checkin_auto_v1";
@@ -516,12 +514,7 @@ export default function UserProfileTab() {
 
                   <View style={styles.walletMainRow}>
                     <View style={styles.balanceCol}>
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        delayLongPress={2500}
-                        onLongPress={() => setDevSheetVisible(true)}
-                      >
-                        <View style={styles.balanceNumberRow}>
+                      <View style={styles.balanceNumberRow}>
                           <Text
                             style={[styles.balanceAmount, { color: "#FFFFFF" }]}
                           >
@@ -536,7 +529,6 @@ export default function UserProfileTab() {
                             Coins
                           </Text>
                         </View>
-                      </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity
@@ -1005,12 +997,6 @@ export default function UserProfileTab() {
             visible={policyModal !== null}
             initialTab={policyModal === "agreement" ? "terms" : "privacy"}
             onClose={() => setPolicyModal(null)}
-          />
-
-          {/* Dev sheet ,  passcode-gated testing tools */}
-          <DevSheetModal
-            visible={devSheetVisible}
-            onClose={() => setDevSheetVisible(false)}
           />
         </SafeAreaView>
       </AppBackground>
