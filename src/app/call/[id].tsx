@@ -41,7 +41,8 @@ import {
   FAKE_CALL_VIDEOS,
   MOCK_PROFILES,
   Profile,
-  VIRTUAL_GIFTS
+  VIRTUAL_GIFTS,
+  VirtualGift
 } from "../../data/mockProfiles";
 import { saveCallLog } from "../../services/callHistoryService";
 import { MEDIA_HEADERS } from "../../services/videoService";
@@ -146,8 +147,7 @@ export default function VideoCallScreen() {
   const [cameraFacing, setCameraFacing] = useState<"front" | "back">("front");
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [coinsDepletedModalVisible, setCoinsDepletedModalVisible] =
-    useState(false);
+  const [pendingAutoGift, setPendingAutoGift] = useState<VirtualGift | null>(null);
   const [inCallRechargeAlertVisible, setInCallRechargeAlertVisible] =
     useState(false);
   const [endCallConfirmVisible, setEndCallConfirmVisible] = useState(false);
@@ -186,7 +186,7 @@ export default function VideoCallScreen() {
     if (direction === "outgoing" && coins < profile.callRate) {
       setDisconnectReason("insufficient_coins");
       setCallState("ended");
-      setCoinsDepletedModalVisible(true);
+      setRechargeModalVisible(true);
     }
 
     return () => {
@@ -246,7 +246,9 @@ export default function VideoCallScreen() {
 
   // When call ends or screen unmounts, resume recurring calls after 1 minute
   useEffect(() => {
+    incomingCallService.setInCall(true);
     return () => {
+      incomingCallService.setInCall(false);
       incomingCallService.onCallEnded();
     };
   }, []);
@@ -380,7 +382,7 @@ export default function VideoCallScreen() {
             setActualCoinsSpent(profile.callRate);
           } else {
             handleEndCall("insufficient_coins");
-            setCoinsDepletedModalVisible(true);
+            setRechargeModalVisible(true);
             schedulePostDepletionReminder(profile.name).catch(() => {});
           }
         });
@@ -1250,37 +1252,7 @@ export default function VideoCallScreen() {
             </View>
           </SafeAreaView>
 
-          {/* Coins Depleted / Low Balance Modal */}
-          <AppModal
-            visible={coinsDepletedModalVisible}
-            onClose={() => {
-              setCoinsDepletedModalVisible(false);
-            }}
-            title={
-              coins < profile.callRate ? "Insufficient Coins" : "Coins Depleted"
-            }
-            description={
-              coins < profile.callRate
-                ? `${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`
-                : "Your coin balance ran out during the call. Recharge now to continue your private video connections!"
-            }
-            icon="wallet-outline"
-            iconColor="#FFD700"
-            primaryAction={{
-              label: "Recharge Now",
-              onPress: () => {
-                setCoinsDepletedModalVisible(false);
-                setRechargeModalVisible(true);
-              },
-            }}
-            secondaryAction={{
-              label: "Dismiss",
-              onPress: () => {
-                setCoinsDepletedModalVisible(false);
-              },
-            }}
-          />
-
+          {/* Recharge modal opens directly on insufficient coins (no intermediate prompt) */}
           <RechargeModal
             visible={rechargeModalVisible}
             onClose={() => {
@@ -1791,7 +1763,10 @@ export default function VideoCallScreen() {
         visible={giftModalVisible}
         onClose={() => setGiftModalVisible(false)}
         onGiftSent={handleGiftSent}
-        onNeedRecharge={() => setRechargeModalVisible(true)}
+        onInsufficientCoins={(g) => {
+          setPendingAutoGift(g);
+          setRechargeModalVisible(true);
+        }}
       />
 
       <RechargeModal
@@ -1819,6 +1794,25 @@ export default function VideoCallScreen() {
             } else {
               setInCallRechargeAlertVisible(false);
               handleEndCall("coins_depleted");
+            }
+          }
+        }}
+        onRechargeSuccess={async () => {
+          if (pendingAutoGift) {
+            const g = pendingAutoGift;
+            setPendingAutoGift(null);
+            if (g.coins <= getCoins()) {
+              const ok = await deductCoins(g.coins);
+              if (ok) {
+                setGiftModalVisible(false);
+                handleGiftSent({
+                  name: g.name,
+                  icon: g.icon,
+                  coins: g.coins,
+                  emoji: g.emoji,
+                  accentColor: g.accentColor,
+                });
+              }
             }
           }
         }}

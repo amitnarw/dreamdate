@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import AppHeader from '../components/AppHeader';
 import AppModal from '../components/AppModal';
 import PaymentSelectorSheet from '../components/PaymentSelectorSheet';
 import RechargeModal from '../components/RechargeModal';
+import SocialProofTicker from '../components/SocialProofTicker';
 import { useTheme } from '../context/ThemeContext';
 import { VIP_WEEKLY_PACKAGE, PaymentPackage } from '../services/paymentService';
 import { useWallet } from '../services/wallet';
@@ -130,7 +132,11 @@ export default function VipMembershipScreen() {
                   { backgroundColor: isDark ? 'rgba(255, 215, 0, 0.14)' : 'rgba(255, 215, 0, 0.12)' },
                 ]}
               >
-                <Ionicons name="ribbon" size={22} color="#FFD700" />
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={styles.headerLogo}
+                  resizeMode="contain"
+                />
               </View>
               <Text style={[styles.title, { color: text }]}>BoloNa VIP</Text>
               <Text style={[styles.subtitle, { color: subtle }]}>
@@ -275,6 +281,9 @@ export default function VipMembershipScreen() {
           visible={rechargeVisible}
           onClose={() => setRechargeVisible(false)}
         />
+
+        {/* Floating Social Proof Ticker */}
+        <SocialProofTicker style={{ bottom: Math.max(insets.bottom, 14) + 68 }} />
       </SafeAreaView>
     </AppBackground>
   );
@@ -302,6 +311,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+  },
+  headerLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   title: {
     fontSize: 26,

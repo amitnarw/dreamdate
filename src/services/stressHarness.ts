@@ -23,6 +23,8 @@ import {
 /* report.                                                              */
 /* ------------------------------------------------------------------ */
 
+const TOPIC_FILLER = "topicword";
+
 export interface HarnessReport {
   totalPicks: number;
   uniqueStrings: number;
@@ -67,6 +69,10 @@ export async function runStressHarness(
     "abuse", "abuse_hard", "anger",
     "question_her", "thanks", "bye",
     "food", "outfit", "activity", "sleep", "mood", "recharge", "joke", "fallback",
+    "answer_yes_no", "answer_open_q", "answer_how", "answer_why",
+    "answer_when", "answer_where", "answer_what", "answer_who",
+    "answer_self_statement", "answer_agreement", "answer_disagreement",
+    "answer_command", "answer_feeling", "answer_topic_echo",
   ];
 
   for (const id of profileIds) warmAntiRepeat(id);
@@ -82,7 +88,9 @@ export async function runStressHarness(
     const composed: string[] = [];
     const seen = new Set<string>();
     while (composed.length < 8 && seen.size < pool.length) {
-      const v = composeBase(pool[Math.floor(Math.random() * pool.length)], arch);
+      const raw = pool[Math.floor(Math.random() * pool.length)]
+        .replace(/\{topic\}/g, TOPIC_FILLER);
+      const v = composeBase(raw, arch);
       if (!seen.has(v)) {
         seen.add(v);
         composed.push(v);

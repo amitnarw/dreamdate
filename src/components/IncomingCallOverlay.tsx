@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -22,8 +23,8 @@ import { startRinging, stopRinging } from '../services/soundService';
 import { Profile } from '../data/mockProfiles';
 import { useAuth } from '../context/AuthContext';
 import { MEDIA_HEADERS } from '../services/videoService';
-import { getCoins } from '../services/wallet';
-import AppModal from './AppModal';
+import { getCoins, useWallet } from '../services/wallet';
+import LimitedOfferModal from './LimitedOfferModal';
 import RechargeModal from './RechargeModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,9 +46,10 @@ const RING_VIBRATION_PATTERN = [0, 700, 800];
 export default function IncomingCallOverlay() {
   const router = useRouter();
   const { user } = useAuth();
+  const { hasPurchased, isVip } = useWallet();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [limitedOfferVisible, setLimitedOfferVisible] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
   const pulse = useRef(new Animated.Value(1)).current;
   const sonar1 = useRef(new Animated.Value(0)).current;
@@ -55,6 +57,12 @@ export default function IncomingCallOverlay() {
   const ringTimer = useRef<any>(null);
   const profileRef = useRef<Profile | null>(null);
   profileRef.current = profile;
+
+  // The incoming-call overlay renders inside a native Modal window on
+  // Android, which can bypass the main window's FLAG_SECURE. Re-apply
+  // protection with its own key while the overlay is mounted so the ring
+  // screen also produces fully-black screenshots / recordings.
+  usePreventScreenCapture('incoming-call-overlay');
 
   const stopRing = () => {
     if (ringTimer.current) {
@@ -142,6 +150,17 @@ export default function IncomingCallOverlay() {
     return () => sub.remove();
   }, [profile?.id]);
 
+  useEffect(() => {
+    const unsub = incomingCallService.subscribeFirstCallConcluded(() => {
+      if (!hasPurchased && !isVip) {
+        setTimeout(() => {
+          setLimitedOfferVisible(true);
+        }, 500);
+      }
+    });
+    return unsub;
+  }, [hasPurchased, isVip]);
+
   const handleAccept = () => {
     const p = profileRef.current;
     if (!p) return;
@@ -150,7 +169,7 @@ export default function IncomingCallOverlay() {
       stopRing();
       setPendingProfile(p);
       setProfile(null);
-      setInsufficientModalVisible(true);
+      setRechargeModalVisible(true);
       return;
     }
     stopRing();
@@ -280,39 +299,6 @@ export default function IncomingCallOverlay() {
         )}
       </Modal>
 
-      <AppModal
-        visible={insufficientModalVisible}
-        stackedActions
-        onClose={() => {
-          setInsufficientModalVisible(false);
-          if (pendingProfile) {
-            incomingCallService.declined(pendingProfile.id);
-          }
-          setPendingProfile(null);
-        }}
-        title="Insufficient Coins to Answer"
-        description={`${pendingProfile?.name}'s private video call costs ${pendingProfile?.callRate} coins/min. You currently have ${getCoins()} coins.\n\nPlease recharge to answer her call!`}
-        icon="wallet-outline"
-        iconColor="#FFD700"
-        primaryAction={{
-          label: "Recharge to Answer",
-          onPress: () => {
-            setInsufficientModalVisible(false);
-            setRechargeModalVisible(true);
-          },
-        }}
-        secondaryAction={{
-          label: "Decline Call",
-          onPress: () => {
-            setInsufficientModalVisible(false);
-            if (pendingProfile) {
-              incomingCallService.declined(pendingProfile.id);
-            }
-            setPendingProfile(null);
-          },
-        }}
-      />
-
       <RechargeModal
         visible={rechargeModalVisible}
         onClose={() => {
@@ -331,6 +317,11 @@ export default function IncomingCallOverlay() {
           }
           setPendingProfile(null);
         }}
+      />
+
+      <LimitedOfferModal
+        visible={limitedOfferVisible}
+        onClose={() => setLimitedOfferVisible(false)}
       />
     </>
   );

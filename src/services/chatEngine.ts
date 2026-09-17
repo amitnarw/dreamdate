@@ -331,7 +331,7 @@ export async function getActiveChatThreads(): Promise<ChatThreadItem[]> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Reply generation ,  human texting behavior (legacy pools live below; */
+/* Reply generation, human texting behavior (legacy pools live below; */
 /* live replies are planned by personaEngine.planReply)                */
 /* ------------------------------------------------------------------ */
 
@@ -1196,6 +1196,9 @@ const NUDGES: Record<CharacterArchetype, string[]> = {
     "seen kar liya 😒",
     "oye suno",
     "achha bye phir",
+    "so gaye kya 🙈",
+    "idhar aao yaar",
+    "chup kyun ho 😏",
   ],
   sweet_romantic: [
     "hello ji? 😅",
@@ -1203,6 +1206,8 @@ const NUDGES: Record<CharacterArchetype, string[]> = {
     "reply kar do na",
     "busy ho kya",
     "achha baad me baat karte hain",
+    "aap bhi na 🌸",
+    "miss kar rahi hu",
   ],
   bold_alluring: [
     "hello? 😏",
@@ -1210,22 +1215,41 @@ const NUDGES: Record<CharacterArchetype, string[]> = {
     "reply fast",
     "bore kar rahe ho",
     "achha main jaa rahi",
+    "idhar aao 😏",
+    "phir mood bana ke rakha hai",
+    "aaj raat achhi hogi 😏",
   ],
   mysterious_sensual: [
     "hello? ✨",
     "kahan ho",
     "reply doge?",
     "chale gaye kya",
+    "thoda aur bata do ✨",
+    "intezaar hai 🌙",
   ],
 };
 
 export function pickNudge(
   archetype: CharacterArchetype,
+  facts?: { name?: string },
 ): { text: string; delayMs: number } | null {
   if (Math.random() >= NUDGE_PROBABILITY) return null;
   const pool = NUDGES[archetype] || NUDGES.playful_tease;
+  let text = pool[Math.floor(Math.random() * pool.length)];
+  if (facts?.name && Math.random() < 0.35) {
+    const name = facts.name.trim();
+    if (name) {
+      const filled = text
+        .replace(/\?$/, " " + name + "?")
+        .replace(/kahan gaye/i, "kahan gaye " + name)
+        .replace(/kahan ho/i, "kahan ho " + name)
+        .replace(/hello\?/i, "hello " + name + "?")
+        .replace(/seen kar liya/i, "seen kar liya " + name);
+      if (filled !== text) text = filled;
+    }
+  }
   return {
-    text: pool[Math.floor(Math.random() * pool.length)],
+    text,
     delayMs: jitter(25_000, 90_000),
   };
 }
@@ -1250,7 +1274,7 @@ export function subscribeNewMessages(cb: NewMessageListener): () => void {
  * Append a message to a thread and notify live subscribers.
  * Single place that announces HER arrivals: pop sound + short vibration
  * for every profile-sent message, no matter which funnel delivered it.
- * (The chat screen must NOT play its own pop for these ,  that doubles.)
+ * (The chat screen must NOT play its own pop for these, that doubles.)
  */
 export async function deliverLiveMessage(
   profileId: string,
@@ -1300,7 +1324,7 @@ export function getActiveChatProfileId(): string | null {
 
 /* ------------------------------------------------------------------ */
 /* Legacy pool bridge for personaEngine (food/outfit/activity/        */
-/* whatsapp/short/fallback) ,  real persisted anti-repeat via the      */
+/* whatsapp/short/fallback), real persisted anti-repeat via the      */
 /* caller's recentSigs instead of the old in-memory-only cache.       */
 /* ------------------------------------------------------------------ */
 
@@ -1318,7 +1342,7 @@ export function pickLegacyReply(
   const candidates = fresh.length > 0 ? fresh : pool;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   let bubbles = (pick?.bubbles || ["acha"]).slice(0, 2);
-  // 2nd legacy bubble is also an afterthought, not a rule ,  drop it often
+  // 2nd legacy bubble is also an afterthought, not a rule, drop it often
   if (bubbles.length > 1 && Math.random() < 0.6) bubbles = bubbles.slice(0, 1);
   return { bubbles, sig: `legacy:${pick?.sig ?? "none"}` };
 }

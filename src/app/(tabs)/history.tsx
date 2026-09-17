@@ -78,13 +78,12 @@ export default function MessageCenterHistory() {
   const { coins } = useWallet();
   const [activeTab, setActiveTab] = useState<TabType>('chats');
   const [rechargeVisible, setRechargeVisible] = useState(false);
-  const [lowBalanceAlert, setLowBalanceAlert] = useState<{ visible: boolean; name: string; rate: number }>({ visible: false, name: '', rate: 0 });
 
   const handleCallPress = (profileId: string, name: string) => {
     const profile = MOCK_PROFILES.find((p) => p.id === profileId);
     const rate = profile?.callRate ?? 50;
     if (coins < rate) {
-      setLowBalanceAlert({ visible: true, name, rate });
+      setRechargeVisible(true);
       return;
     }
     router.push(`/call/${profileId}` as any);
@@ -497,26 +496,6 @@ export default function MessageCenterHistory() {
           </View>
 
           <RechargeModal visible={rechargeVisible} onClose={() => setRechargeVisible(false)} />
-
-          {/* Low Balance Alert */}
-          <AppModal
-            visible={lowBalanceAlert.visible}
-            onClose={() => setLowBalanceAlert({ visible: false, name: '', rate: 0 })}
-            title="Insufficient Coins"
-            description={`${lowBalanceAlert.name}'s video call rate is ${lowBalanceAlert.rate} coins/min. You have ${coins} coins. Please recharge to call!`}
-            icon="videocam-outline"
-            primaryAction={{
-              label: 'Recharge Now',
-              onPress: () => {
-                setLowBalanceAlert({ visible: false, name: '', rate: 0 });
-                setRechargeVisible(true);
-              },
-            }}
-            secondaryAction={{
-              label: 'Cancel',
-              onPress: () => setLowBalanceAlert({ visible: false, name: '', rate: 0 }),
-            }}
-          />
         </SafeAreaView>
       </AppBackground>
     </BlurTargetView>

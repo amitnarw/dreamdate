@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppBlurView from '../../components/AppBlurView';
+import SocialProofTicker from '../../components/SocialProofTicker';
 import { AppBlurConfig } from '../../constants/blurConfig';
 import { TabBlurProvider, useTabBlur } from '../../context/TabBlurContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -88,6 +89,7 @@ function FloatingGlassTabBar({ state, descriptors, navigation }: any) {
       ]}
       pointerEvents="box-none"
     >
+      <SocialProofTicker />
       <AppBlurView
         key={`bottom-tab-blur-${isDark ? 'dark' : 'light'}`}
         style={[

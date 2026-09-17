@@ -105,35 +105,56 @@ function makeRing() {
 }
 
 /**
- * Premium crystal-bell notification tone:
- * An ethereal ascending double-chime with crystal clarity and smooth warm tail.
- * Padded with silence up to 1.0s for Android expo-audio reliability.
+ * Ultra-soft, velvety premium notification tone:
+ * A gentle, warm acoustic chime with a smooth rounded attack and soothing decay.
+ * Completely free of sharp transients or harsh high-pitched frequencies.
  */
 function makeMessagePop() {
   const seconds = 1.0;
   const audible = 0.55;
   const n = Math.floor(SAMPLE_RATE * seconds);
-  const out = new Array(n).fill(0);
+  const raw = new Array(n).fill(0);
 
-  // High-register sparkling notes
-  const G6 = 1567.98;
-  const C7 = 2093.00;
-  const E7 = 2637.02;
+  // Sweet, warm, luxury messenger double chime (A5 880Hz -> C#6 1108.7Hz)
+  const A5  = 880.00;
+  const CS6 = 1108.73;
+
+  function chimeTone(t, freq, decay = 5.0, attackSec = 0.008) {
+    if (t < 0) return 0;
+    const attackProgress = Math.min(1, t / Math.max(0.001, attackSec));
+    const smoothAttack = 0.5 * (1 - Math.cos(Math.PI * attackProgress));
+    const env = smoothAttack * Math.exp(-t * decay);
+
+    // Warm, rounded acoustic spectrum: fundamental + gentle overtone
+    const s1 = Math.sin(2 * Math.PI * freq * t);
+    const s2 = 0.30 * Math.sin(2 * Math.PI * (freq * 2) * t);
+    const s3 = 0.08 * Math.sin(2 * Math.PI * (freq * 3) * t);
+
+    return env * (s1 + s2 + s3);
+  }
 
   const notes = [
-    { at: 0.00, f: G6, decay: 8.5, vol: 0.75 },
-    { at: 0.08, f: C7, decay: 8.0, vol: 0.9 },
-    { at: 0.15, f: E7, decay: 9.0, vol: 0.65 },
+    { at: 0.00, f: A5,  decay: 5.5, vol: 0.85 },
+    { at: 0.08, f: CS6, decay: 4.8, vol: 1.00 },
   ];
 
+  let maxVal = 0;
   for (let i = 0; i < n; i++) {
     const t = i / SAMPLE_RATE;
-    if (t > audible) break; // trailing silence
+    if (t > audible) break;
     let v = 0;
     for (const note of notes) {
-      v += bell(t - note.at, note.f, note.decay, 0.004) * note.vol;
+      v += chimeTone(t - note.at, note.f, note.decay, 0.008) * note.vol;
     }
-    out[i] = v * 0.32;
+    raw[i] = v;
+    if (Math.abs(v) > maxVal) maxVal = Math.abs(v);
+  }
+
+  // Peak normalize to 0.88 (-1.1 dB) for crystal-clear audibility on mobile speakers
+  const out = new Array(n).fill(0);
+  const scale = maxVal > 0 ? 0.88 / maxVal : 0.88;
+  for (let i = 0; i < n; i++) {
+    out[i] = raw[i] * scale;
   }
   return out;
 }

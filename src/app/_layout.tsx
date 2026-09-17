@@ -13,6 +13,7 @@ import AppBackground from "../components/AppBackground";
 import IncomingCallOverlay from "../components/IncomingCallOverlay";
 import OfflineNotice from "../components/OfflineNotice";
 import PermissionsPrimerModal from "../components/PermissionsPrimerModal";
+import ScreenCaptureGuard from "../components/ScreenCaptureGuard";
 import SplashScreenView from "../components/SplashScreenView";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import {
@@ -357,6 +358,12 @@ function RootNavigator() {
         {/* Mounted at root so the incoming-call request covers every
             screen (tabs, tab bar, modals) no matter where the user is */}
         <IncomingCallOverlay />
+
+        {/* Window-level screen capture / recording protection. Mounted at the
+            root so every screen (login, tabs, chat, call, profile, modals)
+            inherits FLAG_SECURE on Android and the iOS secure-screen API on
+            iOS 11+ / 13+. */}
+        <ScreenCaptureGuard />
       </AppBackground>
     </NavigationThemeProvider>
   );

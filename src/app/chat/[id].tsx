@@ -30,6 +30,7 @@ import { useTheme } from "../../context/ThemeContext";
 import {
   MOCK_PROFILES,
   Profile,
+  VirtualGift,
   findGiftVisual,
 } from "../../data/mockProfiles";
 import {
@@ -52,7 +53,7 @@ import {
   runPlan,
   subscribeTyping,
 } from "../../services/replyRunner";
-import { deductCoins, useWallet } from "../../services/wallet";
+import { deductCoins, getCoins, useWallet } from "../../services/wallet";
 
 const QUICK_PROMPTS = [
   "Aap bohot cute ho ✨",
@@ -75,7 +76,7 @@ export default function PremiumChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [callLowBalanceVisible, setCallLowBalanceVisible] = useState(false);
+  const [pendingAutoGift, setPendingAutoGift] = useState<VirtualGift | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   // Locked-photo unlock: which message is pending confirmation
   const [unlockTarget, setUnlockTarget] = useState<ChatMessage | null>(null);
@@ -890,7 +891,7 @@ export default function PremiumChatScreen() {
                 style={styles.videoCallInputBtn}
                 onPress={() => {
                   if (coins < profile.callRate) {
-                    setCallLowBalanceVisible(true);
+                    setRechargeModalVisible(true);
                     return;
                   }
                   router.push(`/call/${profile.id}` as any);
@@ -976,31 +977,35 @@ export default function PremiumChatScreen() {
           visible={giftModalVisible}
           onClose={() => setGiftModalVisible(false)}
           onGiftSent={handleGiftSent}
-          onNeedRecharge={() => setRechargeModalVisible(true)}
+          onInsufficientCoins={(g) => {
+            setPendingAutoGift(g);
+            setRechargeModalVisible(true);
+          }}
         />
 
         <RechargeModal
           visible={rechargeModalVisible}
-          onClose={() => setRechargeModalVisible(false)}
-        />
-
-        {/* Low Balance Video Call Notice */}
-        <AppModal
-          visible={callLowBalanceVisible}
-          onClose={() => setCallLowBalanceVisible(false)}
-          title="Insufficient Coins"
-          description={`${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`}
-          icon="videocam-outline"
-          primaryAction={{
-            label: "Recharge Now",
-            onPress: () => {
-              setCallLowBalanceVisible(false);
-              setRechargeModalVisible(true);
-            },
+          onClose={() => {
+            setRechargeModalVisible(false);
           }}
-          secondaryAction={{
-            label: "Cancel",
-            onPress: () => setCallLowBalanceVisible(false),
+          onRechargeSuccess={async () => {
+            if (pendingAutoGift) {
+              const g = pendingAutoGift;
+              setPendingAutoGift(null);
+              if (g.coins <= getCoins()) {
+                const ok = await deductCoins(g.coins);
+                if (ok) {
+                  setGiftModalVisible(false);
+                  handleGiftSent({
+                    name: g.name,
+                    icon: g.icon,
+                    coins: g.coins,
+                    emoji: g.emoji,
+                    accentColor: g.accentColor,
+                  });
+                }
+              }
+            }
           }}
         />
 

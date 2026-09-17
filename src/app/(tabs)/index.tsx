@@ -16,9 +16,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AnimatedVipBadge from "../../components/AnimatedVipBadge";
 import AppBackground from "../../components/AppBackground";
 import AppHeader from "../../components/AppHeader";
 import AppModal from "../../components/AppModal";
+import LimitedOfferModal from "../../components/LimitedOfferModal";
 import RechargeModal from "../../components/RechargeModal";
 import SkeletonImage from "../../components/SkeletonImage";
 import { useAuth } from "../../context/AuthContext";
@@ -40,7 +42,6 @@ function shuffleProfiles(input: Profile[]): Profile[] {
 
 const FIRST_LAUNCH_TOP_IDS = [
   "girl-18", // img_18
-  "girl-23", // img_23
   "girl-2",  // img_2
   "girl-24", // img_24
   "girl-8",  // img_8
@@ -49,20 +50,26 @@ const FIRST_LAUNCH_TOP_IDS = [
   "girl-25", // img_25
   "girl-38", // img_38
   "girl-26", // img_26
+  "girl-23", // img_23 (strictly 10th position)
 ];
 
 function getTop10Profiles(shuffleTop: boolean = false): Profile[] {
-  const topProfiles: Profile[] = [];
+  const top9Ids = FIRST_LAUNCH_TOP_IDS.slice(0, 9);
+  const top9Profiles: Profile[] = [];
+  top9Ids.forEach((id) => {
+    const found = MOCK_PROFILES.find((p) => p.id === id);
+    if (found) top9Profiles.push(found);
+  });
+
+  const tenthProfile = MOCK_PROFILES.find((p) => p.id === "girl-23");
+
   const topIdSet = new Set(FIRST_LAUNCH_TOP_IDS);
   const remainingProfiles = MOCK_PROFILES.filter((p) => !topIdSet.has(p.id));
 
-  FIRST_LAUNCH_TOP_IDS.forEach((id) => {
-    const found = MOCK_PROFILES.find((p) => p.id === id);
-    if (found) topProfiles.push(found);
-  });
+  const orderedTop9 = shuffleTop ? shuffleProfiles(top9Profiles) : top9Profiles;
+  const fullTop10 = tenthProfile ? [...orderedTop9, tenthProfile] : orderedTop9;
 
-  const orderedTop = shuffleTop ? shuffleProfiles(topProfiles) : topProfiles;
-  return [...orderedTop, ...shuffleProfiles(remainingProfiles)];
+  return [...fullTop10, ...shuffleProfiles(remainingProfiles)];
 }
 
 function getAllRandomizedProfiles(): Profile[] {
@@ -101,7 +108,7 @@ function GridProfileCard({
   index: number;
   router: any;
   coins: number;
-  onNeedRecharge: (profile: Profile) => void;
+  onNeedRecharge: () => void;
 }) {
   const isBusy = !item.isOnline || index % 5 === 1;
   const { theme, isDark } = useTheme();
@@ -235,7 +242,7 @@ function GridProfileCard({
           onPress={(e) => {
             e.stopPropagation();
             if (coins < item.callRate) {
-              onNeedRecharge(item);
+              onNeedRecharge();
               return;
             }
             router.push(`/call/${item.id.split("_p")[0]}` as any);
@@ -327,10 +334,8 @@ export default function HomeScreen() {
   const isPaidUser = Boolean(hasPurchased || isVip);
   const [showVipTeaser, setShowVipTeaser] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [lowBalanceAlert, setLowBalanceAlert] = useState<{
-    visible: boolean;
-    profile?: Profile;
-  }>({ visible: false });
+  const [limitedOfferVisible, setLimitedOfferVisible] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -347,16 +352,27 @@ export default function HomeScreen() {
           );
           const launchCount = launchCountRaw ? parseInt(launchCountRaw, 10) : 0;
           if (!cancelled && !isVip && seen !== "1" && launchCount >= 1) {
-            // Show on 2nd session onwards (launchCount >= 1 means they've opened at least once)
             setShowVipTeaser(true);
             await AsyncStorage.setItem("@dreamdate_vip_teaser_seen_v1", "1");
+          }
+
+          const firstCallConcluded = await AsyncStorage.getItem(
+            "@dreamdate_first_call_concluded_v1",
+          );
+          // Only show few times: 2 out of 6 times (~33% chance) when returning to home
+          if (!cancelled && firstCallConcluded === "1" && !hasPurchased && !isVip) {
+            if (Math.random() < 2 / 6) {
+              setTimeout(() => {
+                setLimitedOfferVisible(true);
+              }, 600);
+            }
           }
         } catch (e) {}
       })();
       return () => {
         cancelled = true;
       };
-    }, [isVip]),
+    }, [isVip, hasPurchased]),
   );
 
   // Profile ordering rule:
@@ -524,7 +540,7 @@ export default function HomeScreen() {
             ListHeaderComponent={
               <View>
                 <View style={styles.titleRow}>
-                  <View>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text
                       style={[
                         styles.headlineText,
@@ -542,6 +558,10 @@ export default function HomeScreen() {
                       🔥 4,280 Female Companions Online Now
                     </Text>
                   </View>
+
+                  {!isVip && (
+                    <AnimatedVipBadge onPress={() => router.push("/vip" as any)} />
+                  )}
                 </View>
 
                 {showVipTeaser && (
@@ -786,9 +806,7 @@ export default function HomeScreen() {
                 index={index}
                 router={router}
                 coins={coins}
-                onNeedRecharge={(profile) =>
-                  setLowBalanceAlert({ visible: true, profile })
-                }
+                onNeedRecharge={() => setRechargeModalVisible(true)}
               />
             )}
           />
@@ -811,33 +829,14 @@ export default function HomeScreen() {
             }}
           />
 
-          {/* Low Balance Video Call Notice */}
-          <AppModal
-            visible={lowBalanceAlert.visible}
-            onClose={() => setLowBalanceAlert({ visible: false })}
-            title="Insufficient Coins"
-            description={
-              lowBalanceAlert.profile
-                ? `${lowBalanceAlert.profile.name}'s video call rate is ${lowBalanceAlert.profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`
-                : "You do not have enough coins to start this video call."
-            }
-            icon="videocam-outline"
-            primaryAction={{
-              label: "Recharge Now",
-              onPress: () => {
-                setLowBalanceAlert({ visible: false });
-                setRechargeModalVisible(true);
-              },
-            }}
-            secondaryAction={{
-              label: "Cancel",
-              onPress: () => setLowBalanceAlert({ visible: false }),
-            }}
-          />
-
           <RechargeModal
             visible={rechargeModalVisible}
             onClose={() => setRechargeModalVisible(false)}
+          />
+
+          <LimitedOfferModal
+            visible={limitedOfferVisible}
+            onClose={() => setLimitedOfferVisible(false)}
           />
         </SafeAreaView>
       </AppBackground>
@@ -877,6 +876,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   vipCardWrap: {

@@ -57,6 +57,27 @@ export const VIP_WEEKLY_PACKAGE: PaymentPackage = {
   note: "BoloNa Weekly VIP Pass",
 };
 
+export const FLASH_OFFER_99: PaymentPackage = {
+  id: "flash_offer_99",
+  title: "Flash Starter Deal",
+  amount: 99,
+  originalAmount: 499,
+  discountPercentage: 80,
+  coinsAwarded: 350,
+  note: "BoloNa 350 Coins Flash Deal",
+};
+
+export const FLASH_OFFER_199: PaymentPackage = {
+  id: "flash_offer_199",
+  title: "VIP Mega Combo",
+  amount: 199,
+  originalAmount: 999,
+  discountPercentage: 80,
+  coinsAwarded: 800,
+  isVip: true,
+  note: "BoloNa 800 Coins + VIP Deal",
+};
+
 const UPI_PAYEE_VPA = "dararaj842-1@okhdfcbank";
 const UPI_PAYEE_NAME = "Darasingh Rajput";
 const UPI_AID = "uGICAgMD1x9exUA";

@@ -18,9 +18,15 @@ import {
   maybeTimeFlavor,
 } from "./realism";
 import { getCoins } from "./wallet";
+import {
+  analyseAnswer,
+  extractFacts,
+  AnswerAnalysis,
+  ExtractedFacts,
+} from "./answerEngine";
 
 /* ------------------------------------------------------------------ */
-/* Persona engine ,  offline "she's a real person" simulation           */
+/* Persona engine, offline "she's a real person" simulation           */
 /*                                                                     */
 /* Research basis:                                                     */
 /* - ChatScript: gambits (she drives) / rejoinders (reacts to what     */
@@ -41,7 +47,7 @@ function jitter(min: number, max: number): number {
 
 /* ------------------------------------------------------------------ */
 /* Per-girl behavior config (deterministic per profile, so all 20      */
-/* girls behave differently ,  not just different wording)              */
+/* girls behave differently, not just different wording)              */
 /* ------------------------------------------------------------------ */
 
 export interface PersonaConfig {
@@ -116,13 +122,18 @@ export interface GirlMemory {
   affection: number; // 0-100 hidden escalation meter
   seen: Record<string, number>; // response-nodeId -> times shown
   recentSigs: string[]; // anti-repeat ring (cap 8)
-  lastTopics: string[]; // topic ring (cap 4) ,  catches "you keep saying that"
+  lastTopics: string[]; // topic ring (cap 4), catches "you keep saying that"
   askedPhoto: number; // how many times he asked for photos
-  awaitingUserPhoto: boolean; // she said "you first" ,  next msg/photo resolves it
+  awaitingUserPhoto: boolean; // she said "you first", next msg/photo resolves it
   userPhotoReceived: boolean;
-  promisedCall: boolean; // she said she'd call ,  excuse may follow
+  promisedCall: boolean; // she said she'd call, excuse may follow
   turns: number;
   hisName?: string;
+  facts: ExtractedFacts;
+  /** Temporary heat from continuous spicy exchanges this session (decays). */
+  sessionHeat: number;
+  /** Last few user texts (cap 6) for continuity callbacks + repeat detection. */
+  recentUserTexts: string[];
 }
 
 const DEFAULT_MEMORY: GirlMemory = {
@@ -135,6 +146,9 @@ const DEFAULT_MEMORY: GirlMemory = {
   userPhotoReceived: false,
   promisedCall: false,
   turns: 0,
+  facts: {},
+  sessionHeat: 0,
+  recentUserTexts: [],
 };
 
 export async function loadMemory(profileId: string): Promise<GirlMemory> {
@@ -142,7 +156,7 @@ export async function loadMemory(profileId: string): Promise<GirlMemory> {
     const raw = await AsyncStorage.getItem(MEMORY_PREFIX + profileId);
     if (raw) return { ...DEFAULT_MEMORY, ...JSON.parse(raw) };
   } catch (e) {}
-  // Fresh girl: randomized starting warmth ,  some instantly warm, some slow
+  // Fresh girl: randomized starting warmth, some instantly warm, some slow
   return { ...DEFAULT_MEMORY, affection: jitter(15, 50) };
 }
 
@@ -153,7 +167,7 @@ async function saveMemory(profileId: string, mem: GirlMemory): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Intent matching ,  ordered concept sets (specific first).            */
+/* Intent matching, ordered concept sets (specific first).            */
 /* NOTE: video_call MUST come before whatsapp so "call karo" doesn't   */
 /* fall into the number-refusal pool (old bug).                        */
 /* ------------------------------------------------------------------ */
@@ -177,7 +191,31 @@ export type IntentId =
   | "food"
   | "outfit"
   | "activity"
-  | "fallback";
+  | "fallback"
+  | "answer_yes_no"
+  | "answer_open_q"
+  | "answer_how"
+  | "answer_why"
+  | "answer_when"
+  | "answer_where"
+  | "answer_what"
+  | "answer_who"
+  | "answer_self_statement"
+  | "answer_agreement"
+  | "answer_disagreement"
+  | "answer_command"
+  | "answer_feeling"
+  | "answer_topic_echo"
+  | "dirty_request"
+  | "dirty_question"
+  | "sexual_compliment"
+  | "abuse"
+  | "abuse_hard"
+  | "anger"
+  | "miss_you"
+  | "jealousy"
+  | "ignore"
+  | "sleep";
 
 function normalize(text: string): string {
   return (
@@ -514,7 +552,7 @@ function isKnownIntent(s: string): boolean {
 }
 
 /* ------------------------------------------------------------------ */
-/* Response pools ,  Ink-style {seq|cycle|once|shuffle} variants.       */
+/* Response pools, Ink-style {seq|cycle|once|shuffle} variants.       */
 /* Short Hinglish, lazy punctuation, horny + excited, no em dashes.    */
 /* ------------------------------------------------------------------ */
 
@@ -558,6 +596,41 @@ function composePool(intent: CorpusIntent, arch: CharacterArchetype): string[] {
 }
 
 /**
+ * Pick a SPICY reply. With higher affection + sessionHeat she engages more
+ * (dirty_yes / dirty_request / sexual_compliment); with low warmth she
+ * deflects (dirty_deflect). This is the affection-ladder softening from
+ * Phase 3.2 — the same dirty user input gets a noticeably hotter reply
+ * as the relationship warms up.
+ */
+function pickSpicyPool(
+  arch: CharacterArchetype,
+  profileId: string,
+  mem: GirlMemory,
+  intentSlot: "dirty_request" | "dirty_question" | "sexual_compliment",
+  count = 8,
+): string {
+  const warmth = mem.affection + mem.sessionHeat * 0.4;
+  const engagedP =
+    warmth >= 80 ? 0.92 :
+    warmth >= 60 ? 0.78 :
+    warmth >= 40 ? 0.58 :
+    warmth >= 20 ? 0.35 : 0.18;
+  const yesBoost = mem.sessionHeat >= 40 ? 0.35 : 0;
+  let intent: CorpusIntent = intentSlot;
+  const roll = Math.random();
+  if (roll < engagedP) {
+    intent = intentSlot;
+  } else if (roll < engagedP + yesBoost) {
+    intent = "dirty_yes";
+  } else if (Math.random() < 0.6) {
+    intent = "dirty_tease";
+  } else {
+    intent = "dirty_deflect";
+  }
+  return pickCorpus(intent, arch, profileId, mem, `spicy:${intent}:${arch}`, count, {});
+}
+
+/**
  * Optional context decoration. Returns the reply possibly enriched with:
  *   - time-of-day flavor (subtle ~35%)
  *   - imperfection layer (drop punctuation / lowercase)
@@ -579,22 +652,74 @@ function contextualize(
   out = maybeTimeFlavor(out);
   // 2. Imperfection
   out = applyImperfection(out);
-  // 3. Context callbacks: occasionally echo his last word, or mention
-  //    a pending promise/photo.
-  if (Math.random() < 0.18 && opts.lastUserText) {
-    const words = opts.lastUserText.split(/\s+/).filter((w) => w.length >= 4);
-    if (words.length) {
-      const echo = words[Math.floor(Math.random() * words.length)];
-      out = `${out} , ${echo} yaad rahega`;
+  // 3. Phase 4 polish — replace the random word-echo with smart fact
+  //    callbacks so the reply can reference the user's name / location /
+  //    last feeling when we know them.
+  if (opts.mem?.facts?.name && Math.random() < 0.2) {
+    const name = opts.mem.facts.name;
+    if (!out.toLowerCase().includes(name.toLowerCase())) {
+      const nameSlot = Math.random() < 0.5 ? `prefix` : `suffix`;
+      if (nameSlot === "prefix") {
+        if (Math.random() < 0.5) {
+          out = `${name}, ${out}`;
+        } else {
+          out = `arre ${name}, ${out}`;
+        }
+      } else {
+        out = `${out}, ${name}`;
+      }
+    }
+  }
+  if (Math.random() < 0.1 && opts.mem.facts?.location) {
+    const loc = opts.mem.facts.location;
+    if (loc.length > 2 && !out.toLowerCase().includes(loc.toLowerCase())) {
+      const cbs: Record<string, string[]> = {
+        playful_tease: [
+          ` ${loc} yaad rahega`,
+          ` ${loc} me kya scene hai ab`,
+        ],
+        sweet_romantic: [
+          ` ${loc} se aapke dil tak ❤️`,
+          ` ${loc} yaad aa gaya`,
+        ],
+        bold_alluring: [
+          ` ${loc} ka kuch yaad aa gaya`,
+          ` ${loc} me kab milne aao`,
+        ],
+        mysterious_sensual: [
+          ` ${loc} aapke saath`,
+          ` ${loc} ki ek baat`,
+        ],
+      };
+      const arr = cbs[opts.arch] || cbs.playful_tease;
+      out = out + arr[Math.floor(Math.random() * arr.length)];
+    }
+  }
+  if (opts.mem.facts?.feeling && Math.random() < 0.18) {
+    const feel = opts.mem.facts.feeling;
+    const feelCbs: Record<string, string[]> = {
+      thaki: [" thak gaye? aaram karo na 🌸", " aaj thak mat lena"],
+      bored: [" bore ho to baat karte hain 🙈", " bore ho to aao na"],
+      low: [" acha nahi lag raha? baat karte hain 🌸", " kya hua, sab theek?"],
+      happy: [" khush lag rahe ho aaj 😍", " khush ho toh aur batao"],
+      khush: [" khush ho aaj? maza aa gaya 🌸", " khush kyun ho, batana toh"],
+      udaas: [" udaas ho? baat karo na 🌷", " udaas mat ho"],
+    };
+    const arr = feelCbs[feel];
+    if (arr && arr.length) {
+      const cb = arr[Math.floor(Math.random() * arr.length)];
+      if (!out.toLowerCase().includes(cb.replace(/^\s+/, "").toLowerCase())) {
+        out = out + cb;
+      }
     }
   }
   if (Math.random() < 0.12 && opts.mem.promisedCall) {
     const cb = pickCorpusCallback("promised_call", opts.arch);
-    if (cb && !out.includes(cb)) out = `${out} , ${cb}`;
+    if (cb && !out.includes(cb)) out = `${out}, ${cb}`;
   }
   if (Math.random() < 0.18 && opts.mem.awaitingUserPhoto) {
     const cb = pickCorpusCallback("awaiting_photo", opts.arch);
-    if (cb && !out.includes(cb)) out = `${out} , ${cb}`;
+    if (cb && !out.includes(cb)) out = `${out}, ${cb}`;
   }
   return out;
 }
@@ -658,6 +783,55 @@ function pickCorpus(
   return contextualize(chosen, { arch, mem, lastUserText: ctx.lastUserText });
 }
 
+/**
+ * Sister of pickCorpus: pulls an answer-shape pool, fills the {topic}
+ * slot with the user's first usable keyword, and decorates. Slots keep
+ * enough context that the reply visibly responds to his words.
+ */
+function pickAnswerPool(
+  intent:
+    | "answer_yes_no"
+    | "answer_open_q"
+    | "answer_how"
+    | "answer_why"
+    | "answer_when"
+    | "answer_where"
+    | "answer_what"
+    | "answer_who"
+    | "answer_self_statement"
+    | "answer_agreement"
+    | "answer_disagreement"
+    | "answer_command"
+    | "answer_feeling"
+    | "answer_topic_echo",
+  arch: CharacterArchetype,
+  profileId: string,
+  mem: GirlMemory,
+  analysis: AnswerAnalysis,
+): string {
+  warmAntiRepeat(profileId);
+  const rawPool = getPool(intent, arch);
+  const topic = analysis.topic ?? "ye";
+  const sample: string[] = [];
+  const seenInSample = new Set<string>();
+  for (let i = 0; i < 36 && sample.length < 12; i++) {
+    const filled = rawPool[Math.floor(Math.random() * rawPool.length)]
+      .replace(/\{topic\}/g, topic);
+    const composed = composeBase(filled, arch);
+    if (!seenInSample.has(composed)) {
+      seenInSample.add(composed);
+      sample.push(composed);
+    }
+  }
+  let chosen = pickWithNoRepeatSync(profileId, sample);
+  if (!chosen) chosen = sample[Math.floor(Math.random() * sample.length)];
+  if (!chosen) chosen = rawPool[0].replace(/\{topic\}/g, topic);
+  mem.seen[`${intent}:${arch}`] = (mem.seen[`${intent}:${arch}`] ?? 0) + 1;
+  mem.recentSigs.push(`${intent}:chosen`);
+  if (mem.recentSigs.length > 30) mem.recentSigs = mem.recentSigs.slice(-30);
+  return contextualize(chosen, { arch, mem, lastUserText: analysis.raw });
+}
+
 /** Lazy "k" / "ok" reply for tiny user inputs (~50% chance). */
 function maybeLazy(
   userText: string,
@@ -701,6 +875,66 @@ function toCorpusIntent(intent: IntentId): CorpusIntent {
     case "fallback":
     default:
       return "fallback";
+  }
+}
+
+/** Map IntentId → the answer-shape pool intent (Phase 1 wire-up). */
+function toAnswerIntent(intent: IntentId):
+  | "answer_yes_no"
+  | "answer_open_q"
+  | "answer_how"
+  | "answer_why"
+  | "answer_when"
+  | "answer_where"
+  | "answer_what"
+  | "answer_who"
+  | "answer_self_statement"
+  | "answer_agreement"
+  | "answer_disagreement"
+  | "answer_command"
+  | "answer_feeling"
+  | "answer_topic_echo" {
+  switch (intent) {
+    case "answer_yes_no": return "answer_yes_no";
+    case "answer_open_q": return "answer_open_q";
+    case "answer_how": return "answer_how";
+    case "answer_why": return "answer_why";
+    case "answer_when": return "answer_when";
+    case "answer_where": return "answer_where";
+    case "answer_what": return "answer_what";
+    case "answer_who": return "answer_who";
+    case "answer_self_statement": return "answer_self_statement";
+    case "answer_agreement": return "answer_agreement";
+    case "answer_disagreement": return "answer_disagreement";
+    case "answer_command": return "answer_command";
+    case "answer_feeling": return "answer_feeling";
+    case "answer_topic_echo":
+    default:
+      return "answer_topic_echo";
+  }
+}
+
+/** Map an AnswerAnalysis.shape to the corresponding answer IntentId. */
+function shapeToAnswerIntent(
+  shape: AnswerAnalysis["shape"],
+): IntentId {
+  switch (shape) {
+    case "yes_no_q": return "answer_yes_no";
+    case "open_q": return "answer_open_q";
+    case "how_q": return "answer_how";
+    case "why_q": return "answer_why";
+    case "when_q": return "answer_when";
+    case "where_q": return "answer_where";
+    case "what_q": return "answer_what";
+    case "who_q": return "answer_who";
+    case "self_statement": return "answer_self_statement";
+    case "agreement": return "answer_agreement";
+    case "disagreement": return "answer_disagreement";
+    case "command": return "answer_command";
+    case "feeling_share": return "answer_feeling";
+    case "other":
+    default:
+      return "answer_topic_echo";
   }
 }
 
@@ -1253,13 +1487,13 @@ export interface PlanFollowUp {
 export interface ReplyPlan {
   intent: IntentId;
   bubbles: string[];
-  /** Silence BEFORE typing shows (1-10s random ,  the anti-instant fix) */
+  /** Silence BEFORE typing shows (1-10s random, the anti-instant fix) */
   preTypingMs: number;
   /** Typing duration per bubble */
   typingMs: number[];
   /** Gap before 2nd bubble */
   gapMs: number;
-  /** True when she was "busy" ,  dots flicker mid-silence as theater.
+  /** True when she was "busy", dots flicker mid-silence as theater.
    *  The reply STILL lands inside the 10s hard cap. */
   readSilence: boolean;
   /** Optional busy-flicker choreography (relative to plan start). */
@@ -1332,7 +1566,7 @@ function weighted<T>(pairs: [T, number][]): T {
 
 /**
  * Locked exclusive for chat sends: a random lockedPhoto (content the user
- * can NEVER see free ,  gallery shows it blurred, detail gallery too).
+ * can NEVER see free, gallery shows it blurred, detail gallery too).
  * Falls back to a random gallery photo only if she has no locked set.
  */
 function exclusivePhoto(
@@ -1433,7 +1667,7 @@ function rollCallOutcome(
       ["recharge_first", 0.55 + cfg.greed * 0.3],
       ["you_call_me", 0.15],
       ["shy_deflect", 0.12],
-      ["will_call", 0.1], // mercy ,  she calls anyway, short
+      ["will_call", 0.1], // mercy, she calls anyway, short
       ["excuse_later", 0.08],
     ]);
   }
@@ -1456,7 +1690,7 @@ function rollCallOutcome(
 }
 
 /* ------------------------------------------------------------------ */
-/* Main planner (async ,  memory is now REALLY persisted, fixing the    */
+/* Main planner (async, memory is now REALLY persisted, fixing the    */
 /* dead fire-and-forget history path in the old sync reply fn)         */
 /* ------------------------------------------------------------------ */
 
@@ -1471,7 +1705,49 @@ export async function planReply(
   const coins = getCoins();
   mem.turns += 1;
 
-  // She said "you first" earlier ,  this message/photo resolves it
+  // Session heat: spicy exchange decays per non-spicy turn, accumulates
+  // for continued dirty/sexual intents so she stops deflecting the same way.
+  const lc = " " + userText.toLowerCase() + " ";
+  const SPICY_MARKERS = [
+    "sexy", "dirty", "nangi", "nange", "nude", "nudes", "sex",
+    "chumma", "chummi", "kiss", "kissing", "lip",
+    "body", "body part", "boob", "breast", "thigh", "hips",
+    "lund", "lund ", "gand", "gand ", "chut", " pussy", "vagina",
+    "bf", "boyfriend", "girlfriend", "kya karoge", "kya karengi",
+    "tere sath", "tera ", "teri ", "hum ",
+    "masturbate", "cuddle", "hug", "strip", "kiss kar",
+    "pyar", "love", "i love you", "miss you", "yaad aa",
+  ];
+  const userWasSpicy = SPICY_MARKERS.some((m) => lc.includes(m));
+  mem.sessionHeat = Math.max(0, (mem.sessionHeat ?? 0) - 4);
+  if (userWasSpicy) mem.sessionHeat = Math.min(100, mem.sessionHeat + 22);
+  mem.recentUserTexts.push(userText);
+  if (mem.recentUserTexts.length > 6) mem.recentUserTexts = mem.recentUserTexts.slice(-6);
+  // Repeat detection: did he send the same words recently? If so, route to
+  // a quick playful notice pool instead of pretending the message is new.
+  const repeatNormalized = userText.trim().toLowerCase().replace(/\s+/g, " ");
+  let isRepeat = false;
+  if (repeatNormalized.length >= 5) {
+    for (const prev of mem.recentUserTexts.slice(-2, -1)) {
+      const pn = prev.trim().toLowerCase().replace(/\s+/g, " ");
+      if (pn === repeatNormalized) {
+        isRepeat = true;
+        break;
+      }
+      // Soft repeat: identical first 12+ chars
+      if (pn.length >= 12 && repeatNormalized.startsWith(pn.slice(0, 12))) {
+        isRepeat = true;
+        break;
+      }
+    }
+  }
+  const newFacts = extractFacts(userText);
+  if (newFacts.name) mem.facts.name = newFacts.name;
+  if (newFacts.location) mem.facts.location = newFacts.location;
+  if (newFacts.job) mem.facts.job = newFacts.job;
+  if (newFacts.feeling) mem.facts.feeling = newFacts.feeling;
+
+  // She said "you first" earlier, this message/photo resolves it
   if (mem.awaitingUserPhoto && !opts.isUserPhotoResolve) {
     mem.awaitingUserPhoto = false;
     const sendBack = Math.random() < 0.4 + cfg.sendPhotoP * 0.4;
@@ -1657,40 +1933,22 @@ export async function planReply(
       },
     );
   } else if (intent === "yes") {
+    const analysis = analyseAnswer(userText);
     plan = buildPlan(
       mem,
       cfg,
       intent,
-      [
-        pickCorpus(
-          "fallback",
-          arch,
-          profile.id,
-          mem,
-          `yes:${arch}`,
-        ),
-      ],
-      {
-        affectionDelta: 2,
-      },
+      [pickAnswerPool("answer_agreement", arch, profile.id, mem, analysis)],
+      { affectionDelta: 2 },
     );
   } else if (intent === "no") {
+    const analysis = analyseAnswer(userText);
     plan = buildPlan(
       mem,
       cfg,
       intent,
-      [
-        pickCorpus(
-          "fallback",
-          arch,
-          profile.id,
-          mem,
-          `no:${arch}`,
-        ),
-      ],
-      {
-        affectionDelta: 0,
-      },
+      [pickAnswerPool("answer_disagreement", arch, profile.id, mem, analysis)],
+      { affectionDelta: 0 },
     );
   } else if (intent === "recharge") {
     plan = buildPlan(
@@ -1710,6 +1968,45 @@ export async function planReply(
         affectionDelta: 2,
       },
     );
+  } else if (
+    intent === "dirty_request" ||
+    intent === "dirty_question" ||
+    intent === "sexual_compliment"
+  ) {
+    // Phase 3: spicy intents engage-and-tease (not deflect). Affection
+    // ladder + session heat decide how readily she escalates.
+    const spicyText = pickSpicyPool(
+      arch,
+      profile.id,
+      mem,
+      intent,
+      10,
+    );
+    plan = buildPlan(mem, cfg, intent, [spicyText], {
+      affectionDelta: userWasSpicy ? 3 : 1,
+    });
+  } else if (intent === "abuse" || intent === "abuse_hard" || intent === "anger") {
+    // Tone-shift per archetype — but she never leaves.
+    const abuseIntent =
+      intent === "abuse_hard" ? "abuse_hard" :
+      intent === "anger" ? "anger" : "abuse";
+    const abuseText = pickCorpus(abuseIntent, arch, profile.id, mem, `${abuseIntent}:${arch}`, 8, {
+      lastUserText: userText,
+    });
+    plan = buildPlan(mem, cfg, intent, [abuseText], { affectionDelta: 0 });
+  } else if (intent === "miss_you" || intent === "jealousy" || intent === "ignore") {
+    const slotIntent: CorpusIntent =
+      intent === "miss_you" ? "miss_you" :
+      intent === "jealousy" ? "jealousy" : "ignore";
+    const emoteText = pickCorpus(slotIntent, arch, profile.id, mem, `${slotIntent}:${arch}`, 8, {
+      lastUserText: userText,
+    });
+    plan = buildPlan(mem, cfg, intent, [emoteText], { affectionDelta: 2 });
+  } else if (intent === "sleep") {
+    const sleepText = pickCorpus("sleep", arch, profile.id, mem, `sleep:${arch}`, 8, {
+      lastUserText: userText,
+    });
+    plan = buildPlan(mem, cfg, intent, [sleepText], { affectionDelta: 1 });
   } else if (intent === "bot") {
     plan = buildPlan(
       mem,
@@ -1729,32 +2026,63 @@ export async function planReply(
       },
     );
   } else {
-    // Legacy topics (food/outfit/activity/whatsapp/short/fallback): reuse the
-    // existing REPLY_SETS pools, now with REAL persisted anti-repeat memory.
-    const legacyTopic =
+    // Phase 1: route everything that used to fall to "achha, aur batao"
+    // through the answer engine so the reply visibly responds to what he
+    // actually said. Legacy topic pools (food/outfit/activity/whatsapp)
+    // still work via the old REPLY_SETS path so niche topics aren't lost.
+    const isLegacyTopic =
       intent === "food" ||
       intent === "outfit" ||
       intent === "activity" ||
       intent === "whatsapp" ||
-      intent === "short"
-        ? intent
-        : "fallback";
-    const picked = pickLegacyReply(arch, legacyTopic, mem.recentSigs);
-    const bubbles = picked.bubbles;
-    const text = bubbles[0] ?? "acha, aur batao";
-    mem.recentSigs.push(picked.sig);
-    if (mem.recentSigs.length > 8) mem.recentSigs = mem.recentSigs.slice(-8);
-    const nudge = pickNudge(arch);
-    plan = buildPlan(mem, cfg, intent, bubbles.length > 0 ? bubbles : [text], {
-      affectionDelta: 1,
-      nudgeText: nudge?.text,
-      nudgeDelayMs: nudge?.delayMs,
-    });
+      intent === "short";
+    if (isLegacyTopic) {
+      const legacyTopic = intent;
+      const picked = pickLegacyReply(arch, legacyTopic, mem.recentSigs);
+      const bubbles = picked.bubbles;
+      const text = bubbles[0] ?? "acha, aur batao";
+      mem.recentSigs.push(picked.sig);
+      if (mem.recentSigs.length > 8) mem.recentSigs = mem.recentSigs.slice(-8);
+      const nudge = pickNudge(arch, mem.facts);
+      plan = buildPlan(mem, cfg, intent, bubbles.length > 0 ? bubbles : [text], {
+        affectionDelta: 1,
+        nudgeText: nudge?.text,
+        nudgeDelayMs: nudge?.delayMs,
+      });
+    } else {
+      // The his text could not be matched to a specific intent — analyse
+      // its SHAPE and pull from the matching answer_* pool, filling {topic}
+      // with his first usable keyword so the reply references what he said.
+      // First though: if he repeated himself, route to repeat_notice.
+      if (isRepeat) {
+        const noticeText = pickCorpus("repeat_notice", arch, profile.id, mem, `repeat:${arch}`, 6, {
+          lastUserText: userText,
+        });
+        plan = buildPlan(mem, cfg, intent, [noticeText], {
+          affectionDelta: 0,
+        });
+      } else {
+        const analysis = analyseAnswer(userText);
+        let chosenShape = toAnswerIntent(
+          shapeToAnswerIntent(analysis.shape),
+        );
+        const answerText = pickAnswerPool(
+          chosenShape,
+          arch,
+          profile.id,
+          mem,
+          analysis,
+        );
+        plan = buildPlan(mem, cfg, intent, [answerText], {
+          affectionDelta: 1,
+        });
+      }
+    }
   }
 
   // 20% nudge if planner didn't set one
   if (!plan.nudgeText) {
-    const nudge = pickNudge(arch);
+    const nudge = pickNudge(arch, mem.facts);
     if (nudge) {
       plan.nudgeText = nudge.text;
       plan.nudgeDelayMs = nudge.delayMs;
@@ -1936,7 +2264,7 @@ function buildLoveReply(
 }
 
 /* ------------------------------------------------------------------ */
-/* User sends HER a photo (gallery picker) ,  she reacts, affection up  */
+/* User sends HER a photo (gallery picker), she reacts, affection up  */
 /* ------------------------------------------------------------------ */
 
 export async function planUserPhotoReaction(
@@ -1981,7 +2309,7 @@ export async function planUserPhotoReaction(
 }
 
 /* ------------------------------------------------------------------ */
-/* Deferred follow-up delivery ,  works whether her chat is open or     */
+/* Deferred follow-up delivery, works whether her chat is open or     */
 /* not (deliverLiveMessage notifies + updates open screens live).      */
 /* ------------------------------------------------------------------ */
 
@@ -2043,7 +2371,7 @@ export function schedulePlannedFollowUp(
 }
 
 /* ------------------------------------------------------------------ */
-/* Proactive flirty initiations ,  SHE texts first to pull him back.    */
+/* Proactive flirty initiations, SHE texts first to pull him back.    */
 /* Hard register (user-approved): horny, direct, photo/call teases.    */
 /* ~60% text flirt / ~25% locked-photo tease / ~15% call-tease.        */
 /* Anti-repeat via the shared seen-counts + recentSigs memory.         */
@@ -2181,7 +2509,7 @@ export async function planProactivePing(
       photo: { url: owed.url, cost: owed.cost, caption: owed.caption },
     };
   } else if (roll < 0.4) {
-    // Call tease ,  text now, scheduler fires the incoming call after.
+    // Call tease, text now, scheduler fires the incoming call after.
     ping = {
       text: pickCorpus(
         "dirty_tease",

@@ -172,7 +172,7 @@ const SEEDS: readonly ProfileSeed[] = [
   // 29
   { name: 'Rashi Goel', age: 23, city: 'Meerut', country: 'India', language: ['Hindi', 'English'], rating: 4.5, callRate: 90, tagline: 'ganna aur gyaan 🌾', interests: ['agriculture', 'education', 'street food'], bio: 'Simple town ki smart girl. Tera intezaar raat bhar karti hu.', archetype: 'sweet_romantic' },
   // 30
-  { name: 'Ishani Bhalla', age: 25, city: 'Chandigarh', country: 'India', language: ['Hindi', 'English', 'Punjabi'], rating: 4.7, callRate: 125, tagline: 'sector 17 ki shehzaadi 🌆', interests: ['shopping', 'food blogs', 'late-night drives'], bio: 'Chandigarh ki suarwy girl, teri screen pe aati hu at 12 sharp.', archetype: 'playful_tease' },
+  { name: 'Ishani Bhalla', age: 25, city: 'Chandigarh', country: 'India', language: ['Hindi', 'English', 'Punjabi'], rating: 4.7, callRate: 125, tagline: 'sector 17 ki shehzaadi 🌆', interests: ['shopping', 'food blogs', 'late-night drives'], bio: 'Chandigarh ki sweet girl, teri screen pe aati hu at 12 sharp.', archetype: 'playful_tease' },
   // 31
   { name: 'Srishti Joshi', age: 22, city: 'Dehradun', country: 'India', language: ['Hindi', 'English', 'Garhwali'], rating: 4.4, callRate: 80, tagline: 'pahadi pep 🌲', interests: ['yoga', 'tea', 'trekking'], bio: 'Paani wali girl. Baat karein toh, ek ladki mile na mile.', archetype: 'sweet_romantic' },
   // 32

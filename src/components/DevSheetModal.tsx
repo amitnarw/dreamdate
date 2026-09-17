@@ -22,6 +22,7 @@ import {
   setPasscode,
 } from "../services/devTools";
 import { runStressHarness } from "../services/stressHarness";
+import { runCorpusLint } from "../services/corpusLint";
 
 type Mode = "passcode" | "sheet" | "change-passcode";
 
@@ -43,6 +44,7 @@ export default function DevSheetModal({ visible, onClose, onAny }: Props) {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [stressReport, setStressReport] = useState<string | null>(null);
+  const [lintReport, setLintReport] = useState<string | null>(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -417,7 +419,56 @@ export default function DevSheetModal({ visible, onClose, onAny }: Props) {
                     }}
                     busy={busyAction === "stress"}
                   />
+                  <ActionButton
+                    label="Lint corpus"
+                    wide
+                    onPress={async () => {
+                      try {
+                        setBusyAction("lint");
+                        setLintReport(null);
+                        const v = runCorpusLint();
+                        setLintReport(
+                          v.length
+                            ? `${v.length} violation(s):\n` +
+                              v
+                                .slice(0, 6)
+                                .map((x) => `  ${x.rule} [${x.arch}] "${x.preview}"`)
+                                .join("\n")
+                            : "OK — all intent pools clean",
+                        );
+                      } catch (e: any) {
+                        setLintReport("ERR: " + (e?.message ?? "?"));
+                      } finally {
+                        setBusyAction(null);
+                      }
+                    }}
+                    busy={busyAction === "lint"}
+                  />
                 </View>
+                {lintReport ? (
+                  <View
+                    style={[
+                      styles.reportBox,
+                      {
+                        backgroundColor: lintReport.startsWith("OK")
+                          ? "rgba(34,197,94,0.12)"
+                          : "rgba(239,68,68,0.12)",
+                        borderColor: lintReport.startsWith("OK")
+                          ? "rgba(34,197,94,0.4)"
+                          : "rgba(239,68,68,0.4)",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.reportText,
+                        { color: isDark ? "#E5E7EB" : "#1F2937" },
+                      ]}
+                    >
+                      {lintReport}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <Text
                   style={[

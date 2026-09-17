@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import AppModal from './AppModal';
 import CoinIcon from './CoinIcon';
 import { useTheme } from '../context/ThemeContext';
 import { VIRTUAL_GIFTS, VirtualGift } from '../data/mockProfiles';
@@ -29,7 +28,7 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onGiftSent: (gift: { name: string; icon: string; emoji?: string; coins: number; accentColor?: string }) => void;
-  onNeedRecharge: () => void;
+  onInsufficientCoins: (gift: VirtualGift) => void;
 }
 
 const CATEGORIES: Array<VirtualGift['category']> = ['Popular', 'Romantic', 'Luxury', 'VIP'];
@@ -46,14 +45,12 @@ const GIFT_GROUPS: Array<{
   { category: 'VIP', label: 'Ultra VIP Exclusives', badge: 'VIP Only', badgeIcon: 'ribbon' },
 ];
 
-export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge }: Props) {
+export default function GiftModal({ visible, onClose, onGiftSent, onInsufficientCoins }: Props) {
   const { coins } = useWallet();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const [activeCategory, setActiveCategory] = useState<VirtualGift['category']>('Popular');
   const [selectedGift, setSelectedGift] = useState<VirtualGift>(VIRTUAL_GIFTS[0]);
-  const [insufficientModalVisible, setInsufficientModalVisible] = useState(false);
-  const [pendingGift, setPendingGift] = useState<VirtualGift | null>(null);
 
   const scrollRef = React.useRef<ScrollView>(null);
   const groupPositions = React.useRef<{ [key: string]: number }>({}).current;
@@ -100,8 +97,7 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } catch (e) {}
-      setPendingGift(giftToSend);
-      setInsufficientModalVisible(true);
+      onInsufficientCoins(giftToSend);
       return;
     }
 
@@ -110,8 +106,7 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } catch (e) {}
-      setPendingGift(giftToSend);
-      setInsufficientModalVisible(true);
+      onInsufficientCoins(giftToSend);
       return;
     }
 
@@ -179,7 +174,7 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
                   onPress={() => {
                     onClose();
                     setTimeout(() => {
-                      onNeedRecharge();
+                      onInsufficientCoins(selectedGift);
                     }, 220);
                   }}
                   activeOpacity={0.8}
@@ -403,31 +398,6 @@ export default function GiftModal({ visible, onClose, onGiftSent, onNeedRecharge
             </View>
           </BlurView>
         </View>
-
-        {/* In-Sheet Custom Modal for Insufficient Coins (no modal-on-modal conflict) */}
-        <AppModal
-          visible={insufficientModalVisible}
-          useModalHost={false}
-          onClose={() => setInsufficientModalVisible(false)}
-          title="Insufficient Coins"
-          description={`You have ${coins.toLocaleString()} coins, but ${pendingGift?.name || 'this gift'} costs ${pendingGift?.coins.toLocaleString() || ''} coins.\n\nRecharge your wallet to send this gift!`}
-          icon="wallet-outline"
-          iconColor="#FFD700"
-          primaryAction={{
-            label: 'Recharge Now',
-            onPress: () => {
-              setInsufficientModalVisible(false);
-              onClose();
-              setTimeout(() => {
-                onNeedRecharge();
-              }, 220);
-            },
-          }}
-          secondaryAction={{
-            label: 'Cancel',
-            onPress: () => setInsufficientModalVisible(false),
-          }}
-        />
       </View>
     </Modal>
   );

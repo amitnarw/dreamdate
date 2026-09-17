@@ -6,7 +6,6 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Profile } from "../data/mockProfiles";
 import { MEDIA_HEADERS } from "../services/videoService";
 import { useWallet } from "../services/wallet";
-import AppModal from "./AppModal";
 import RechargeModal from "./RechargeModal";
 
 interface Props {
@@ -17,11 +16,10 @@ export default function ProfileCard({ profile }: Props) {
   const router = useRouter();
   const { coins } = useWallet();
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [lowBalanceVisible, setLowBalanceVisible] = useState(false);
 
   const handleVideoCall = () => {
     if (coins < profile.callRate) {
-      setLowBalanceVisible(true);
+      setRechargeModalVisible(true);
       return;
     }
     router.push(`/call/${profile.id}` as any);
@@ -95,25 +93,6 @@ export default function ProfileCard({ profile }: Props) {
           </View>
         </BlurView>
       </TouchableOpacity>
-
-      <AppModal
-        visible={lowBalanceVisible}
-        onClose={() => setLowBalanceVisible(false)}
-        title="Insufficient Coins"
-        description={`${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`}
-        icon="videocam-outline"
-        primaryAction={{
-          label: "Recharge Now",
-          onPress: () => {
-            setLowBalanceVisible(false);
-            setRechargeModalVisible(true);
-          },
-        }}
-        secondaryAction={{
-          label: "Cancel",
-          onPress: () => setLowBalanceVisible(false),
-        }}
-      />
 
       <RechargeModal
         visible={rechargeModalVisible}

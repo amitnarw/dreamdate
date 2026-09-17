@@ -34,16 +34,16 @@ function loadAudio(): Promise<any | null> {
   return modPromise;
 }
 
-async function ensureMode(Audio: any): Promise<void> {
+async function ensureMode(mod: any): Promise<void> {
   if (modeSet) return;
-  modeSet = true;
   try {
-    // playsInSilentMode so the ring/pop is always heard; mix so we never
-    // kill the user's background music.
-    await Audio.setAudioModeAsync({
-      playsInSilentMode: true,
-      interruptionMode: "mixWithOthers",
-    });
+    if (mod?.setAudioModeAsync) {
+      await mod.setAudioModeAsync({
+        playsInSilentMode: true,
+        interruptionMode: "mixWithOthers",
+      });
+      modeSet = true;
+    }
   } catch (e) {}
 }
 
@@ -120,10 +120,10 @@ export async function startRinging(): Promise<void> {
   try {
     const mod = await loadAudio();
     if (!mod?.createAudioPlayer) return;
-    await ensureMode(mod.Audio);
+    await ensureMode(mod);
     if (!ringPlayer) {
-      ringSource = await resolveSource(mod, RING_REQUIRE);
-      ringPlayer = mod.createAudioPlayer(ringSource);
+      const ringSource = await resolveSource(mod, RING_REQUIRE);
+      ringPlayer = mod.createAudioPlayer(ringSource || RING_REQUIRE);
       ringPlayer.loop = true;
       ringPlayer.volume = 1.0;
     }
@@ -146,24 +146,33 @@ export async function stopRinging(): Promise<void> {
   } catch (e) {}
 }
 
-let popPlayer: any = null;
-
 /** One-shot chat "pop" when her message lands. */
 export async function playMessagePop(): Promise<void> {
   try {
     const mod = await loadAudio();
     if (!mod?.createAudioPlayer) return;
-    await ensureMode(mod.Audio);
-    if (!popPlayer) {
-      const src = await resolveSource(mod, POP_REQUIRE);
-      popPlayer = mod.createAudioPlayer(src);
-      popPlayer.loop = false;
-      popPlayer.volume = 0.9;
+    await ensureMode(mod);
+
+    const player = mod.createAudioPlayer(POP_REQUIRE);
+    player.loop = false;
+    player.volume = 1.0;
+    player.play();
+
+    // If not yet loaded, auto-play once playbackStatusUpdate signals isLoaded
+    if (!player.isLoaded && player.addListener) {
+      const sub = player.addListener('playbackStatusUpdate', (status: any) => {
+        if (status?.isLoaded && !status?.playing) {
+          player.play();
+          try {
+            sub?.remove?.();
+          } catch (e) {}
+        }
+      });
+      setTimeout(() => {
+        try {
+          sub?.remove?.();
+        } catch (e) {}
+      }, 1500);
     }
-    await waitLoaded(popPlayer);
-    try {
-      await popPlayer.seekTo(0);
-    } catch (e) {}
-    popPlayer.play();
   } catch (e) {}
 }

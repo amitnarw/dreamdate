@@ -18,9 +18,10 @@ import { PaymentPackage, RECHARGE_PACKAGES } from '../services/paymentService';
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onRechargeSuccess?: () => void;
 }
 
-export default function RechargeModal({ visible, onClose }: Props) {
+export default function RechargeModal({ visible, onClose, onRechargeSuccess }: Props) {
   const { isDark } = useTheme();
   const [selectedPackId, setSelectedPackId] = useState(RECHARGE_PACKAGES[1].id);
   const [paymentSheetVisible, setPaymentSheetVisible] = useState(false);
@@ -218,6 +219,9 @@ export default function RechargeModal({ visible, onClose }: Props) {
             label: 'Great, Continue',
             onPress: () => {
               setSuccessModalVisible(false);
+              try {
+                onRechargeSuccess?.();
+              } catch (e) {}
               onClose();
             },
           }}

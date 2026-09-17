@@ -27,9 +27,9 @@ import GiftModal from "../../components/GiftModal";
 import RechargeModal from "../../components/RechargeModal";
 import SkeletonImage from "../../components/SkeletonImage";
 import { useTheme } from "../../context/ThemeContext";
-import { MOCK_PROFILES, Profile, ProfileMediaItem, VIRTUAL_GIFTS } from "../../data/mockProfiles";
+import { MOCK_PROFILES, Profile, ProfileMediaItem, VIRTUAL_GIFTS, VirtualGift } from "../../data/mockProfiles";
 import { MEDIA_HEADERS } from "../../services/videoService";
-import { deductCoins, useWallet } from "../../services/wallet";
+import { deductCoins, getCoins, useWallet } from "../../services/wallet";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -44,7 +44,7 @@ export default function UserProfileDetail1to1() {
 
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
-  const [callLowBalanceVisible, setCallLowBalanceVisible] = useState(false);
+  const [pendingAutoGift, setPendingAutoGift] = useState<VirtualGift | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   // Locked-photo gallery unlock (per-session; mirrors the chat unlock flow)
   const [unlockedLocked, setUnlockedLocked] = useState<Set<string>>(new Set());
@@ -628,7 +628,7 @@ export default function UserProfileDetail1to1() {
               style={styles.centerCallBtn}
               onPress={() => {
                 if (coins < profile.callRate) {
-                  setCallLowBalanceVisible(true);
+                  setRechargeModalVisible(true);
                   return;
                 }
                 router.push(`/call/${profile.id}` as any);
@@ -794,31 +794,33 @@ export default function UserProfileDetail1to1() {
           visible={giftModalVisible}
           onClose={() => setGiftModalVisible(false)}
           onGiftSent={handleGiftSent}
-          onNeedRecharge={() => setRechargeModalVisible(true)}
+          onInsufficientCoins={(g) => {
+            setPendingAutoGift(g);
+            setRechargeModalVisible(true);
+          }}
         />
 
         <RechargeModal
           visible={rechargeModalVisible}
           onClose={() => setRechargeModalVisible(false)}
-        />
-
-        {/* Low Balance Video Call Notice */}
-        <AppModal
-          visible={callLowBalanceVisible}
-          onClose={() => setCallLowBalanceVisible(false)}
-          title="Insufficient Coins"
-          description={`${profile.name}'s video call rate is ${profile.callRate} coins/min. You have ${coins} coins. Please recharge to start calling!`}
-          icon="videocam-outline"
-          primaryAction={{
-            label: "Recharge Now",
-            onPress: () => {
-              setCallLowBalanceVisible(false);
-              setRechargeModalVisible(true);
-            },
-          }}
-          secondaryAction={{
-            label: "Cancel",
-            onPress: () => setCallLowBalanceVisible(false),
+          onRechargeSuccess={async () => {
+            if (pendingAutoGift) {
+              const g = pendingAutoGift;
+              setPendingAutoGift(null);
+              if (g.coins <= getCoins()) {
+                const ok = await deductCoins(g.coins);
+                if (ok) {
+                  setGiftModalVisible(false);
+                  handleGiftSent({
+                    name: g.name,
+                    icon: g.icon,
+                    coins: g.coins,
+                    emoji: g.emoji,
+                    accentColor: g.accentColor,
+                  });
+                }
+              }
+            }
           }}
         />
 

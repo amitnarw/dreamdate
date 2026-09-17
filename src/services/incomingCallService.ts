@@ -23,6 +23,8 @@ class IncomingCallService {
   private profile: Profile | null = null;
   private calledProfileIds = new Set<string>();
   private listeners = new Set<(p: Profile) => void>();
+  private firstCallListeners = new Set<() => void>();
+  private inCall = false;
 
   private async isUserLoggedIn(): Promise<boolean> {
     try {
@@ -31,6 +33,35 @@ class IncomingCallService {
     } catch {
       return false;
     }
+  }
+
+  getCallCount(): number {
+    return this.callCount;
+  }
+
+  isInCall(): boolean {
+    return this.inCall;
+  }
+
+  setInCall(active: boolean): void {
+    this.inCall = active;
+    if (active) {
+      this.cancelScheduled();
+    }
+  }
+
+  subscribeFirstCallConcluded(cb: () => void): () => void {
+    this.firstCallListeners.add(cb);
+    return () => this.firstCallListeners.delete(cb);
+  }
+
+  private notifyFirstCallConcluded(): void {
+    AsyncStorage.setItem("@dreamdate_first_call_concluded_v1", "1").catch(() => {});
+    this.firstCallListeners.forEach((cb) => {
+      try {
+        cb();
+      } catch (e) {}
+    });
   }
 
   /**
@@ -53,7 +84,7 @@ class IncomingCallService {
     const loggedIn = await this.isUserLoggedIn();
     if (!loggedIn) return;
 
-    if (this.timer || this.ringing) return;
+    if (this.timer || this.ringing || this.inCall) return;
 
     let delay = INCOMING_INITIAL_DELAY_MS;
     if (this.callCount === 1) {
@@ -64,6 +95,7 @@ class IncomingCallService {
 
     this.timer = setTimeout(async () => {
       this.timer = null;
+      if (this.inCall) return;
       await this.fireIncoming();
     }, delay);
   }
@@ -93,6 +125,7 @@ class IncomingCallService {
       this.timer = null;
       const stillLoggedIn = await this.isUserLoggedIn();
       if (!stillLoggedIn) return;
+      if (this.inCall) return;
 
       this.profile = profile;
       this.calledProfileIds.add(profile.id);
@@ -123,13 +156,18 @@ class IncomingCallService {
   accepted(profileId: string): void {
     this.ringing = false;
     this.cancelScheduled();
+    const wasFirstCall = this.callCount === 0;
     // After accepting and finishing the call, next call will be in recurring 1-min phase
     this.callCount = Math.max(this.callCount + 1, 2);
+    if (wasFirstCall) {
+      this.notifyFirstCallConcluded();
+    }
   }
 
   /** Called when video call finishes, arms the 1-minute recurring call. */
   async onCallEnded(): Promise<void> {
     this.cancelScheduled();
+    this.notifyFirstCallConcluded();
     const loggedIn = await this.isUserLoggedIn();
     if (!loggedIn) return;
 
@@ -156,7 +194,11 @@ class IncomingCallService {
       }).catch(() => {});
     }
 
+    const wasFirstCall = this.callCount === 0;
     this.callCount += 1;
+    if (wasFirstCall) {
+      this.notifyFirstCallConcluded();
+    }
 
     // After 1st call disconnects -> 10 seconds.
     // After 2nd call and onwards -> 1 minute.
@@ -189,6 +231,7 @@ class IncomingCallService {
       this.cancelScheduled();
       return;
     }
+    if (this.inCall) return;
 
     const candidates = this.getEligibleCandidates();
     if (candidates.length === 0) return;

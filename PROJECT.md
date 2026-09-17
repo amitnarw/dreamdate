@@ -45,7 +45,8 @@ or in-app timers. This is the engagement/psychology funnel (see §5).
 | Native blur   | `expo-blur`                                                                                                            |
 | Notifications | `expo-notifications` (local scheduled only)                                                                            |
 | Camera + Mic  | `expo-camera` (self-preview only)                                                                                      |
-| Video         | `expo-video` (looped pre-recorded clips)                                                                               |
+| Video         | `expo-video` (looped pre-recorded clips)                                                                              |
+| Screen capture| `expo-screen-capture` (window-level `FLAG_SECURE` → every screen is fully black for screenshots/recordings/recents)  |
 | Payment       | UPI intent (`expo-intent-launcher`, strict response verification) + REAL Google Play Billing (`expo-iap`, consumables) |
 | Storage       | `@react-native-async-storage/async-storage`                                                                            |
 | Icons         | `@expo/vector-icons` (Ionicons)                                                                                        |
@@ -303,11 +304,25 @@ t=0       Fast Login → +100 coins, persist user, jump to Discover
 ### Monetization pressure (what nudges users to buy)
 
 1. **Coin depletion during call** (rate 35–50/min; 100 coins ≈ 2 min call) →
-   `coinsDepletedModalVisible` → Recharge
-2. **Gift failure** → `GiftModal` `onNeedRecharge` → Recharge
+   mid-call `inCallRechargeAlertVisible` (20s grace with Recharge / End Call).
+   Pre-call / first-minute failure opens `RechargeModal` directly.
+2. **Gift failure / any insufficient-coins path** → opens `RechargeModal`
+   directly (no intermediate "Insufficient Coins" prompt). If a gift was the
+   trigger (`onInsufficientCoins`), the parent stores the pending gift and
+   `RechargeModal.onRechargeSuccess` deducts + auto-sends it.
 3. **VIP teaser strip** on Discover from session 2+ (`@dreamdate_launch_count_v1`)
 4. **Weekly VIP** page accessible from profile menu; success unlocks golden
    gradient profile card + 1,500 weekly coin grant
+
+### No-call-while-in-call (incoming-call gate)
+
+`incomingCallService.setInCall(active)` is called by `call/[id].tsx` on mount
+(true) and unmount (false). All entry points — `fireIncoming()` (recurring
+1-min), `scheduleFirstIfEligible()` timer callback, and `requestCallFrom()`
+timer callback (chat promises) — early-return when `inCall` is true. The
+full-screen `IncomingCallOverlay` therefore never rings over an active
+call screen; the recurring call cycle resumes 1 minute after the call
+screen unmounts via the existing `onCallEnded()` arm.
 
 ### Permissions primer (`src/components/PermissionsPrimerModal.tsx`)
 
@@ -966,6 +981,43 @@ The ONLY real-money surface in the app. Two methods, both hardened:
 
 ---
 
+## 13. Screen capture / recording protection
+
+The entire app is **unrecordable**. Screenshots, screen recordings, and the
+recents-apps preview all come out **fully black** on every screen. No screen
+is excluded.
+
+- **Library**: `expo-screen-capture` (`~57.0.3`, first-party, bundled in Expo Go
+  for SDK 57). On Android it sets the `FLAG_SECURE` window flag; on iOS 11+ it
+  blocks screen recording and on iOS 13+ it blocks screenshots. No runtime
+  permissions are required.
+- **Mounted once at the root** via `src/components/ScreenCaptureGuard.tsx`
+  using the `usePreventScreenCapture('app-root')` hook. Because the protection
+  is a *window-level* flag, every screen in the Stack (login, tabs, chat,
+  call, profile, modals) inherits it automatically — no per-screen wiring.
+- **Incoming call ring is doubly guarded**: `IncomingCallOverlay` renders
+  inside a native `Modal` window on Android, which can bypass the main
+  window's `FLAG_SECURE`. The overlay also calls
+  `usePreventScreenCapture('incoming-call-overlay')` so the ring screen is
+  protected too. Distinct keys prevent the two hook instances from
+  cancelling each other on unmount.
+- **No detection overlay**: we deliberately do NOT show a warning modal when
+  a screenshot is detected (would require `READ_MEDIA_IMAGES` permission on
+  older Android and adds an OS consent prompt). The platform's silent black
+  output is the user-visible signal that capture is blocked.
+
+### Verifying it works
+
+- Android emulator: `adb shell input keyevent 120` triggers a screenshot.
+  The result saved to `/sdcard/Pictures/` is fully black.
+- Recents-apps preview: the thumbnail is fully black.
+- Screen recording (`adb shell screenrecord`): the resulting MP4 is fully
+  black.
+- iOS Simulator: **Device → Trigger Screenshot** from the menu bar. The
+  preview shows only black.
+
+---
+
 ## 14. Recent change log (high-level)
 
 | Round | Theme                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -986,3 +1038,4 @@ The ONLY real-money surface in the app. Two methods, both hardened:
 | 14    | Reply runner rewrite (cross-chat survival) + HARD 10s reply cap (any girl, any length, busy = brief flicker theater not real delay) + cross-chat nudges (`hello?? kahan gaye`) fire when he's elsewhere (notification + sound + unread) + proactive flirty pings every 10–15 min per enrolled girl (hard register: text flirt / locked-photo tease / call-tease ~60/25/15) with global caps (3/hr, 4min gap) + per-profile typing bus (`subscribeTyping` / `isTypingFor`) + service-level user-send clock (`notifyUserSent`) + gift-thanks moved to runner. Chat screen is now a thin view: history + subscriptions + send. Reply timers NEVER live in the screen again. |
 | 15    | v3 conversation corpus (`conversationCorpus.ts`, 30 intents × 4 archetypes, ~2.5k base variants) + slot grammar (opener/mid/closer/particle/emoji pools, combinatorial unique surface strings) + anti-repeat service (`antiRepeat.ts`, sync 30-slot recent ring + 7-day ledger capped 500/girl + cross-girl guard) — HARD INVARIANT: a girl NEVER uses the same words in the same sequence. + Dev sheet (passcode-gated 2760/4-digit, 3-fail 60s lockout, changeable in-sheet, works in every build) with +100/+1k/+10k coin grants, VIP 7d, reset wallet, reset repeat ledger, change passcode (all logged with source: "dev"). Wire: long-press the Profile tab balance number (2.5s). Plan: phases 2-4 (NLU, time/context, harness) still queued. |
 | 16    | v3 engine complete: Phase 2 NLU brain (`scripts/train-nlu.js` build-time → `assets/nlu-model.json` 2.2MB bundled → `nluService.ts` `manager.import()` at boot, regex override gates monetization intents) trained on 1,500+ Hinglish utterances across 29 intents (smoke 7/7 on unseen phrasing). Phase 3 time/context/reactions/imperfection (`realism.ts`): tod-flavour prefix/suffix, context callbacks (echo last word, mention promisedCall/awaitingUserPhoto per-archetype), imperfection layer (8% drop punct, 5% lowercase, 12% typing-restart, 50% lazy "k/ok" for tiny inputs). Phase 4 stress harness (`stressHarness.ts`) runnable from dev sheet "Run 200-msg stress" button — verified 500 picks = 500 unique strings, 0 within-30 dupes, 0 cross-girl dupes. Cross-girl ring bumped 30→100. Plan: 2.5k corpus left at headroom to 10k if you want more density per intent. |
+| 17    | App-wide screenshot & screen-recording block: `expo-screen-capture` mounted once at the root via `ScreenCaptureGuard` (key `app-root`) → every screen (login, tabs, chat, call, profile, modals) inherits Android `FLAG_SECURE` + iOS 11+ / 13+ secure-screen API → screenshots, screen recordings, and the recents-apps preview all come out fully black. `IncomingCallOverlay` ALSO re-applies the hook (key `incoming-call-overlay`) because the ring screen renders inside a native `Modal` window that can bypass the main window's FLAG_SECURE. No per-screen work needed anywhere. Library is bundled in Expo Go for SDK 57. |
