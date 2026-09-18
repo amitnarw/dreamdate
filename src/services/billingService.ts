@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import {
+  FLASH_OFFER_199,
+  FLASH_OFFER_99,
   PaymentPackage,
   RECHARGE_PACKAGES,
   VIP_WEEKLY_PACKAGE,
@@ -30,6 +32,8 @@ export const PLAY_SKU_BY_PACKAGE_ID: Record<string, string> = {
   pack_199: "coin_400",
   pack_299: "coin_1000",
   vip_weekly_499: "vip_weekly",
+  flash_99: "flash_99",
+  flash_199: "flash_199",
 };
 
 export type PlayBuyStatus =
@@ -231,7 +235,12 @@ async function settlePurchase(
 }
 
 function skuToPackage(sku: string): PaymentPackage | null {
-  const all = [...RECHARGE_PACKAGES, VIP_WEEKLY_PACKAGE];
+  const all = [
+    ...RECHARGE_PACKAGES,
+    VIP_WEEKLY_PACKAGE,
+    FLASH_OFFER_99,
+    FLASH_OFFER_199,
+  ];
   return all.find((p) => PLAY_SKU_BY_PACKAGE_ID[p.id] === sku) ?? null;
 }
 

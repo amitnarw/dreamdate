@@ -4,7 +4,10 @@ import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import {
+  allowScreenCaptureAsync,
+  preventScreenCaptureAsync,
+} from 'expo-screen-capture';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -60,9 +63,13 @@ export default function IncomingCallOverlay() {
 
   // The incoming-call overlay renders inside a native Modal window on
   // Android, which can bypass the main window's FLAG_SECURE. Re-apply
-  // protection with its own key while the overlay is mounted so the ring
-  // screen also produces fully-black screenshots / recordings.
-  usePreventScreenCapture('incoming-call-overlay');
+  // protection with its own key while the overlay is mounted.
+  useEffect(() => {
+    preventScreenCaptureAsync('incoming-call-overlay').catch(() => {});
+    return () => {
+      allowScreenCaptureAsync('incoming-call-overlay').catch(() => {});
+    };
+  }, []);
 
   const stopRing = () => {
     if (ringTimer.current) {
