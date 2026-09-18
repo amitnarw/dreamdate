@@ -3,7 +3,7 @@ import { BlurTargetView } from "expo-blur";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -92,7 +92,7 @@ function warmAvatarCache(profiles: Profile[], firstN: number, intervalMs: number
   );
   uris.forEach((uri, i) => {
     setTimeout(() => {
-      ExpoImage.prefetch([uri], { cachePolicy: "disk", headers: MEDIA_HEADERS }).catch(() => {});
+      ExpoImage.prefetch([uri], { cachePolicy: "disk", headers: MEDIA_HEADERS }).catch(() => { });
     }, i * intervalMs);
   });
 }
@@ -147,17 +147,17 @@ function GridProfileCard({
         colors={
           isDark
             ? [
-                "transparent",
-                "rgba(14, 10, 12, 0.0)",
-                "rgba(14, 10, 12, 0.60)",
-                "rgba(14, 10, 12, 0.95)",
-              ]
+              "transparent",
+              "rgba(14, 10, 12, 0.0)",
+              "rgba(14, 10, 12, 0.60)",
+              "rgba(14, 10, 12, 0.95)",
+            ]
             : [
-                "transparent",
-                "rgba(255, 255, 255, 0.0)",
-                "rgba(255, 255, 255, 0.72)",
-                "rgba(255, 255, 255, 0.98)",
-              ]
+              "transparent",
+              "rgba(255, 255, 255, 0.0)",
+              "rgba(255, 255, 255, 0.72)",
+              "rgba(255, 255, 255, 0.98)",
+            ]
         }
         locations={[0, 0.4, 0.72, 1]}
         style={StyleSheet.absoluteFill}
@@ -367,7 +367,7 @@ export default function HomeScreen() {
               }, 600);
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       })();
       return () => {
         cancelled = true;
@@ -414,7 +414,7 @@ export default function HomeScreen() {
             setPage(1);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     })();
   }, []);
 
@@ -448,7 +448,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      incomingCallService.scheduleFirstIfEligible().catch(() => {});
+      incomingCallService.scheduleFirstIfEligible().catch(() => { });
       return () => {
         // Don't cancel here ,  if it fires the overlay handles it
       };
@@ -815,7 +815,7 @@ export default function HomeScreen() {
           <AppModal
             visible={exitModalVisible}
             onClose={() => setExitModalVisible(false)}
-            title="Exit DreamDate?"
+            title="Exit BoloNa?"
             description="Are you sure you want to exit the app? Your conversations and coins will be saved."
             icon="log-out"
             primaryAction={{

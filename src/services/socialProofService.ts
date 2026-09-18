@@ -145,11 +145,11 @@ class SocialProofManager {
   }
 
   private scheduleNext(customDelay?: number) {
-    // Random gap: Min 5 seconds (5000ms), Max 40 seconds (40000ms)
+    // Random gap: Min 8 seconds (8000ms) to accommodate 7s display time, Max 40 seconds (40000ms)
     const delay =
       customDelay !== undefined
         ? customDelay
-        : Math.floor(5000 + Math.random() * (40000 - 5000));
+        : Math.floor(8000 + Math.random() * (40000 - 8000));
 
     this.timer = setTimeout(() => {
       const event = generateSocialProofEvent();

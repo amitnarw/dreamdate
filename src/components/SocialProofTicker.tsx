@@ -27,6 +27,7 @@ export default function SocialProofTicker({ onPress, style }: Props) {
   const translateY = useRef(new Animated.Value(20)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.92)).current;
+  const dismissTimer = useRef<any>(null);
 
   useEffect(() => {
     // Show first event after 2.5 seconds
@@ -40,11 +41,17 @@ export default function SocialProofTicker({ onPress, style }: Props) {
 
     return () => {
       clearTimeout(initialTimer);
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
       unsubscribe();
     };
   }, []);
 
   const displayEvent = (evt: SocialProofEvent) => {
+    if (dismissTimer.current) {
+      clearTimeout(dismissTimer.current);
+      dismissTimer.current = null;
+    }
+
     setEvent(evt);
     translateY.setValue(16);
     opacity.setValue(0);
@@ -59,7 +66,7 @@ export default function SocialProofTicker({ onPress, style }: Props) {
       }),
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 220,
+        duration: 240,
         useNativeDriver: true,
       }),
       Animated.spring(scale, {
@@ -70,23 +77,23 @@ export default function SocialProofTicker({ onPress, style }: Props) {
       }),
     ]).start();
 
-    // Auto-dismiss after 3.6 seconds
-    setTimeout(() => {
+    // Auto-dismiss after 7.0 seconds (extended reading duration)
+    dismissTimer.current = setTimeout(() => {
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: -12,
-          duration: 240,
+          duration: 260,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 0,
-          duration: 200,
+          duration: 220,
           useNativeDriver: true,
         }),
       ]).start(() => {
         setEvent(null);
       });
-    }, 3600);
+    }, 7000);
   };
 
   if (!event) return null;
@@ -137,7 +144,7 @@ export default function SocialProofTicker({ onPress, style }: Props) {
           <View style={styles.iconCircle}>
             <Ionicons
               name={isVip ? 'sparkles' : 'flash'}
-              size={13}
+              size={16}
               color="#FFFFFF"
             />
           </View>
@@ -169,7 +176,7 @@ export default function SocialProofTicker({ onPress, style }: Props) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 74, // Floats cleanly above the bottom tab bar
+    bottom: 76, // Floats cleanly above the bottom tab bar
     left: 0,
     right: 0,
     zIndex: 9999,
@@ -177,27 +184,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillTouch: {
-    borderRadius: 22,
-    maxWidth: 356,
-    width: '90%',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    borderRadius: 26,
+    maxWidth: 382,
+    width: '94%',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 9,
   },
   pillGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 42,
-    paddingHorizontal: 10,
-    borderRadius: 22,
-    gap: 8,
+    height: 52,
+    paddingHorizontal: 13,
+    borderRadius: 26,
+    gap: 10,
   },
   iconCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -207,28 +214,30 @@ const styles = StyleSheet.create({
   },
   mainText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    letterSpacing: -0.1,
+    fontSize: 13,
+    letterSpacing: -0.15,
   },
   boldName: {
     fontWeight: '900',
+    fontSize: 13.5,
   },
   cityText: {
-    fontSize: 11,
-    opacity: 0.9,
+    fontSize: 12,
+    opacity: 0.92,
     fontWeight: '600',
   },
   actionText: {
+    fontSize: 13,
     fontWeight: '800',
   },
   timeBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   timeText: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
